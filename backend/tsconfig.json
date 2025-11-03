@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    "module": "Node16",
+    "moduleResolution": "node16",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
     "verbatimModuleSyntax": false,
     "rootDir": "src",
-    "outDir": "dist",
-    "strict": true,
-    "skipLibCheck": true
+    "outDir": "dist"
   }
 }
