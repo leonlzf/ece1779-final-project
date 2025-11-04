@@ -6,7 +6,7 @@ import { ensureDir, nextVersion, versionPath, listFileIds } from "./storage";
 
 export async function createFile(req: Request, res: Response) {
   if (!req.file) return res.status(400).json({ message: "file required" });
-  const fileId = randomUUID();         // ← 改这里
+  const fileId = randomUUID();  
   const ver = 1;
   const dst = versionPath(fileId, ver, req.file.originalname);
   await ensureDir(path.dirname(dst));
