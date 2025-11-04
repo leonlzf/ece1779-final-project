@@ -1,29 +1,61 @@
-﻿import app from "./app";
+﻿// src/server.ts
+import http from "http";
+import type { Application } from "express";
+import app from "./app";
+import { env } from "./config/env";
 
-const PORT = Number(process.env.PORT) || 3000;
+function printRoutes(app: Application) {
+  type Layer = any;
+  const routes: string[] = [];
 
-function printRoutes() {
-  // @ts-ignore
-  const stack = app._router?.stack || [];
-  console.log("Registered routes:");
-  for (const layer of stack) {
-    if (layer.route) {
-      const path = layer.route?.path;
-      const methods = Object.keys(layer.route.methods).join(",");
-      console.log(`  ${methods.toUpperCase()} ${path}`);
-    } else if (layer.name === "router" && layer.handle?.stack) {
-      for (const r of layer.handle.stack) {
-        const subPath = (r.route && r.route.path) || "";
-        const methods = r.route ? Object.keys(r.route.methods).join(",") : "";
-        // @ts-ignore
-        const mountPath = layer.regexp?.source?.replace(/^\\\//, "/").replace(/\\\//g, "/").replace(/\(\?:\(\[\^\\\/]\+\?\)\)/g, ":param");
-        console.log(`  ${methods.toUpperCase()} ${mountPath}${subPath}`);
+  const walk = (pathPrefix: string, stack: Layer[]) => {
+    for (const layer of stack) {
+      if (layer.name === "router" && layer.handle?.stack) {
+        const mount =
+          layer.regexp?.fast_slash
+            ? "/"
+            : String(layer.regexp?.source || "")
+                .replace(/\\\//g, "/")
+                .replace(/^\^/, "")
+                .replace(/\$$/, "")
+                .replace(/\(\?:\(\[\^\\\/]\+\?\)\)/g, ":param");
+        walk(pathPrefix + mount, layer.handle.stack);
+      }
+      
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods)
+          .map((m) => m.toUpperCase())
+          .join(",");
+        routes.push(`${methods} ${pathPrefix}${layer.route.path}`);
       }
     }
-  }
+  };
+
+  const stack: Layer[] = app._router?.stack || [];
+  walk("", stack);
+
+  console.log("Registered routes:");
+  for (const r of routes) console.log("  " + r);
 }
 
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-  printRoutes();
+const server = http.createServer(app);
+
+server.listen(env.PORT, () => {
+  console.log(`Server listening on http://localhost:${env.PORT}`);
+  printRoutes(app);
 });
+
+server.on("error", (err) => {
+  console.error("Server error:", err);
+  process.exit(1);
+});
+
+const shutdown = () => {
+  console.log("Shutting down...");
+  server.close(() => {
+    console.log("HTTP server closed.");
+    process.exit(0);
+  });
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);

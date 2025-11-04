@@ -1,20 +1,35 @@
-import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { RequestHandler } from "express";
+import jwt, { Secret, SignOptions, JwtPayload } from "jsonwebtoken";
+import { env } from "../config/env";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
-export interface JwtUser { id: string; email: string; role?: "OWNER"|"COLLAB"|"VIEWER"; }
+// Temporary, need to be modified
+export const requireAuth: RequestHandler = (req, res, next) => {
+  const authHeader = req.headers.authorization;
 
-export function sign(user: JwtUser) {
-  return jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
-}
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res
+      .status(401)
+      .json({ success: false, error: "Missing or invalid authorization header" });
+  }
 
-export function requireAuth(req: Request & { user?: JwtUser }, res: Response, next: NextFunction) {
-  const h = req.header("authorization");
-  if (!h?.startsWith("Bearer ")) return res.status(401).json({ message: "missing token" });
+  const token = authHeader.split(" ")[1] as string;
+
   try {
-    req.user = jwt.verify(h.slice(7), JWT_SECRET) as JwtUser;
+    const decoded = jwt.verify(token, env.JWT_SECRET as Secret) as JwtPayload & {
+      uid: string;
+    };
+
+    (req as any).user = { id: decoded.uid };
     next();
   } catch {
-    return res.status(401).json({ message: "invalid token" });
+    return res.status(401).json({ success: false, error: "Invalid or expired token" });
   }
-}
+};
+
+
+export const signToken = (userId: string) => {
+  const secret: Secret = env.JWT_SECRET as Secret;
+  const options: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"] };
+
+  return jwt.sign({ uid: userId }, secret, options);
+};
