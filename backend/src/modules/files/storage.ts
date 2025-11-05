@@ -1,8 +1,13 @@
 import fsp from "fs/promises";
 import fs from "fs";
 import path from "path";
+import { env } from "../../config/env";
 
-const FILE_ROOT = process.env.FILE_ROOT || "./data/files";
+export const FILE_ROOT =
+  process.env.FILE_ROOT || path.resolve(process.cwd(), "data/files");
+  
+fs.mkdirSync(env.UPLOAD_DIR, { recursive: true });
+
 
 export async function ensureDir(p: string) { await fsp.mkdir(p, { recursive: true }); }
 

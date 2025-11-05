@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
-import { ensureDir, nextVersion, versionPath, listFileIds } from "./storage";
+import fsp from "fs/promises";
+import { ensureDir, nextVersion, versionPath, listFileIds, FILE_ROOT } from "./storage";
 
 export async function createFile(req: Request, res: Response) {
   if (!req.file) return res.status(400).json({ message: "file required" });
@@ -30,9 +31,36 @@ export async function listFiles(_req: Request, res: Response) {
 }
 
 export async function downloadVersion(req: Request, res: Response) {
-  const { id, ver } = req.params;
-  const name = req.query.name as string | undefined;
-  if (!name) return res.status(400).json({ message: "query ?name=original.ext required" });
-  const p = versionPath(id, Number(ver), name);
-  return res.sendFile(path.resolve(p));
+  try {
+    const { id, ver } = req.params;
+    const { name } = req.query;
+
+    const dir = path.join(FILE_ROOT, id, ver);
+    const entries = await fsp.readdir(dir);
+
+    const filename =
+      typeof name === "string" && name.trim() !== ""
+        ? name
+        : entries.length > 0
+        ? entries[0]
+        : null;
+
+    if (!filename) {
+      return res.status(404).json({ success: false, error: "No file found in this version" });
+    }
+
+    const filePath = path.join(dir, filename);
+    console.log("Downloading:", filePath);
+
+    return res.download(filePath, filename, (err) => {
+      if (err && !res.headersSent) {
+        console.error("Download error:", err);
+        res.status(500).json({ success: false, error: "Download failed" });
+      }
+    });
+  } catch (err) {
+    console.error("Download error:", err);
+    res.status(500).json({ success: false, error: "Download failed" });
+  }
 }
+

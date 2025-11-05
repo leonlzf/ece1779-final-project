@@ -11,7 +11,7 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET || "dev-secret-key",
   JWT_EXPIRES_IN: "7d",
 
-  UPLOAD_DIR: process.env.UPLOAD_DIR || path.join(process.cwd(), "tmp_uploads"),
+  UPLOAD_DIR: process.env.UPLOAD_DIR || require("path").resolve(__dirname, "../../data/files"),
 
   CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
 };
