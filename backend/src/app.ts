@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import { requireAuth } from "./middleware/auth";
 import { authRouter } from "./modules/auth/routes";
 import { filesRouter } from "./modules/files/routes";
+import { commentsRouter } from "./modules/comments/routes";
 
 const app = express();
 
@@ -20,6 +21,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.get("/healthz", (_req, res) => res.send("ok"));
 app.use("/auth", authRouter);
 app.use("/files", requireAuth, filesRouter);
+app.use("/", commentsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });

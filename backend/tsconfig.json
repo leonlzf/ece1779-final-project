@@ -11,5 +11,6 @@
     "verbatimModuleSyntax": false,
     "rootDir": "src",
     "outDir": "dist"
-  }
+  },
+  "include": ["src/**/*", "src/types/express.d.ts"]
 }
