@@ -1,5 +1,27 @@
 import type { Request, Response } from "express";
 import crypto from "crypto";
+import { broadcastComment } from "../../realtime/sse";
+import path from "path";
+import fs from "fs/promises";
+
+const COMMENTS_ROOT = path.join(process.cwd(), "data", "comments");
+
+async function loadThread(fileId: string, ver: number) {
+  const p = path.join(COMMENTS_ROOT, `${fileId}@${ver}.json`);
+  try {
+    const txt = await fs.readFile(p, "utf-8");
+    return JSON.parse(txt) as Comment[];
+  } catch {
+    return [];
+  }
+}
+
+async function saveThread(fileId: string, ver: number, arr: Comment[]) {
+  await fs.mkdir(COMMENTS_ROOT, { recursive: true });
+  const p = path.join(COMMENTS_ROOT, `${fileId}@${ver}.json`);
+  await fs.writeFile(p, JSON.stringify(arr, null, 2));
+}
+
 
 /**
  * User roles for permission control
@@ -84,12 +106,17 @@ export async function create(req: Request, res: Response) {
       updatedAt: new Date().toISOString(),
     };
 
-    const k = key(id, versionNo);
-    const arr = store.get(k) ?? [];
+    // const k = key(id, versionNo);
+    // const arr = store.get(k) ?? [];
+    // arr.push(c);
+    // store.set(k, arr);
+    const arr = await loadThread(id, versionNo);
     arr.push(c);
-    store.set(k, arr);
+    await saveThread(id, versionNo, arr);
 
-    // TODO: optional WebSocket broadcast: comment.created
+    // NEW: realtime broadcast (SSE)
+    broadcastComment(id, versionNo, "comment:created", c);
+
     return res.json(c);
   } catch (e: any) {
     if (e.code === 403) return res.status(403).json({ error: "Permission denied" });
@@ -103,8 +130,9 @@ export async function create(req: Request, res: Response) {
 export async function list(req: Request, res: Response) {
   const { id, ver } = req.params;
   const versionNo = Number(ver);
-  const k = key(id, versionNo);
-  const arr = store.get(k) ?? [];
+  // const k = key(id, versionNo);
+  // const arr = store.get(k) ?? [];
+  const arr = await loadThread(id, versionNo);
 
   // Build a threaded structure (root comment + replies)
   const node = new Map<string, any>();
@@ -142,19 +170,43 @@ export async function update(req: Request, res: Response) {
       return res.status(400).json({ error: "text required" });
     }
 
-    for (const [, arr] of store) {
+    // for (const [, arr] of store) {
+    //   const idx = arr.findIndex(c => c.id === commentId);
+    //   if (idx >= 0) {
+    //     const c = arr[idx];
+    //     if (c.userId !== user.id && user.role !== "OWNER") {
+    //       return res.status(403).json({ error: "Permission denied" });
+    //     }
+    //     const updated = { ...c, text: text.trim(), updatedAt: new Date().toISOString() };
+    //     arr[idx] = updated;
+        
+    //     // NEW: realtime broadcast (SSE)
+    //     broadcastComment(c.fileId, c.versionNo, "comment:updated", updated);
+
+    //     return res.json(updated);
+    //   }
+    // }
+    const files = await fs.readdir(COMMENTS_ROOT).catch(() => []);
+    for (const fname of files) {
+      if (!fname.endsWith(".json")) continue;
+      const [fileId, verPart] = fname.replace(".json", "").split("@");
+      const versionNo = Number(verPart);
+      const arr = await loadThread(fileId, versionNo);
       const idx = arr.findIndex(c => c.id === commentId);
-      if (idx >= 0) {
-        const c = arr[idx];
-        if (c.userId !== user.id && user.role !== "OWNER") {
-          return res.status(403).json({ error: "Permission denied" });
-        }
-        const updated = { ...c, text: text.trim(), updatedAt: new Date().toISOString() };
-        arr[idx] = updated;
-        // TODO: optional WebSocket event comment.updated
-        return res.json(updated);
+      if (idx < 0) continue;
+
+      const c = arr[idx];
+      if (c.userId !== user.id && user.role !== "OWNER") {
+        return res.status(403).json({ error: "Permission denied" });
       }
+      const updated = { ...c, text: text.trim(), updatedAt: new Date().toISOString() };
+      arr[idx] = updated;
+      await saveThread(fileId, versionNo, arr);
+
+      broadcastComment(fileId, versionNo, "comment:updated", updated);
+      return res.json(updated);
     }
+
     return res.status(404).json({ error: "Comment not found" });
   } catch {
     return res.status(500).json({ error: "Update failed" });
@@ -171,24 +223,55 @@ export async function remove(req: Request, res: Response) {
     
     const { commentId } = req.params;
 
-    for (const [k, arr] of store) {
+    // for (const [k, arr] of store) {
+    //   const idx = arr.findIndex(c => c.id === commentId);
+    //   if (idx >= 0) {
+    //     const c = arr[idx];
+    //     if (c.userId !== user.id && user.role !== "OWNER") {
+    //       return res.status(403).json({ error: "Permission denied" });
+    //     }
+    //     // Delete itself
+    //     arr.splice(idx, 1);
+    //     // Cascade delete its replies
+    //     for (let i = arr.length - 1; i >= 0; i--) {
+    //       if (arr[i].parentId === commentId) arr.splice(i, 1);
+    //     }
+    //     store.set(k, arr);
+        
+    //     // NEW: realtime broadcast (SSE)
+    //     broadcastComment(c.fileId, c.versionNo, "comment:deleted", { id: c.id });
+
+    //     return res.json({ success: true });
+    //   }
+    // }
+
+     const files = await fs.readdir(COMMENTS_ROOT).catch(() => []);
+    for (const fname of files) {
+      if (!fname.endsWith(".json")) continue;
+      const [fileId, verPart] = fname.replace(".json", "").split("@");
+      const versionNo = Number(verPart);
+
+      const arr = await loadThread(fileId, versionNo);
       const idx = arr.findIndex(c => c.id === commentId);
-      if (idx >= 0) {
-        const c = arr[idx];
-        if (c.userId !== user.id && user.role !== "OWNER") {
-          return res.status(403).json({ error: "Permission denied" });
-        }
-        // Delete itself
-        arr.splice(idx, 1);
-        // Cascade delete its replies
-        for (let i = arr.length - 1; i >= 0; i--) {
-          if (arr[i].parentId === commentId) arr.splice(i, 1);
-        }
-        store.set(k, arr);
-        // TODO: optional WebSocket event comment.deleted
-        return res.json({ success: true });
+      if (idx < 0) continue;
+
+      const c = arr[idx];
+      if (c.userId !== user.id && user.role !== "OWNER") {
+        return res.status(403).json({ error: "Permission denied" });
       }
+
+      // delete self
+      arr.splice(idx, 1);
+      // cascade delete replies
+      for (let i = arr.length - 1; i >= 0; i--) {
+        if (arr[i].parentId === commentId) arr.splice(i, 1);
+      }
+
+      await saveThread(fileId, versionNo, arr);
+      broadcastComment(fileId, versionNo, "comment:deleted", { id: c.id });
+      return res.json({ success: true });
     }
+    
     return res.status(404).json({ error: "Comment not found" });
   } catch {
     return res.status(500).json({ error: "Delete failed" });

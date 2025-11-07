@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8" />
+<h3>SSE realtime comments</h3>
+<pre id="log"></pre>
+<script>
+  const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiI3NzgxMWQwOC01OWNjLTQ1N2MtOGUzNS1lZjEzZmQ5YjFhMTUiLCJpYXQiOjE3NjI0ODAwMzIsImV4cCI6MTc2MzA4NDgzMn0.McVTuKAOJP64KeucKZh1NgHNpAaTBd_5n8xiIreVEfM";     
+  const FILE_ID = "b0bc80df-c679-4d12-a856-f2030b50c015";
+  const VER     = 2;
+
+  const api = (p) => `http://localhost:8080${p}`;
+  const log = (...a) => {
+    const el = document.getElementById("log");
+    el.textContent += a.map(x => typeof x === "string" ? x : JSON.stringify(x)).join(" ") + "\n";
+  };
+
+  log("boot...");
+
+  async function loadHistory() {
+    try {
+      const url = api(`/files/${FILE_ID}/versions/${VER}/comments`);
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+        // credentials: "include",
+      });
+      log("history status", resp.status);
+      const txt = await resp.text();
+      try {
+        const json = JSON.parse(txt);
+        log("history", json);
+      } catch {
+        log("history raw", txt);
+      }
+    } catch (e) {
+      log("history fetch error", String(e));
+    }
+  }
+
+  function subscribeSSE() {
+    try {
+      const url = api(`/files/${FILE_ID}/versions/${VER}/comments/stream?token=${encodeURIComponent(TOKEN)}`);
+      log("sse connect", url);
+      const es = new EventSource(url);
+
+      es.addEventListener("ready",   (e) => log("ready", e.data));
+      es.addEventListener("comment:created", (e) => log("created", e.data));
+      es.addEventListener("comment:updated", (e) => log("updated", e.data));
+      es.addEventListener("comment:deleted", (e) => log("deleted", e.data));
+      es.onerror = (e) => log("sse error", e);
+    } catch (e) {
+      log("sse init error", String(e));
+    }
+  }
+
+  
+  loadHistory().then(subscribeSSE);
+</script>

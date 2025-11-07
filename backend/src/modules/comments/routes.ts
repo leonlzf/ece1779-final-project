@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import * as ctl from "./controller";
+import { commentsStream } from "../../realtime/sse";
 
 export const commentsRouter = Router();
+
+// real-time stream
+commentsRouter.get("/files/:id/versions/:ver/comments/stream", commentsStream);
 
 // Require JWT authentication for all comment actions
 commentsRouter.use(requireAuth);
