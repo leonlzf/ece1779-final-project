@@ -9,6 +9,8 @@ import { commentsRouter } from "./modules/comments/routes";
 import { commentsStream, historyList } from "./realtime/sse";
 import { tagsRouter } from "./modules/tags/routes";
 import { searchRouter } from "./modules/search/routes";
+import { testConnection } from './db';
+testConnection();
 
 const app = express();
 
