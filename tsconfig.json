@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false,
+    "rootDir": "backend/src",
+    "outDir": "backend/dist",
+
+    "sourceMap": true
+  },
+  "include": ["backend/src/**/*", "backend/src/types/express.d.ts"],
+  "exclude": ["node_modules", "backend/dist"]
+}
