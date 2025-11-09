@@ -4,9 +4,10 @@ import path from "path";
 import { env } from "../../config/env";
 
 export const FILE_ROOT =
-  process.env.FILE_ROOT || path.resolve(process.cwd(), "data/files");
-  
-fs.mkdirSync(env.UPLOAD_DIR, { recursive: true });
+  process.env.FILE_ROOT ||
+  path.resolve(__dirname, "../../../../data/files");
+
+fs.mkdirSync(FILE_ROOT, { recursive: true });
 
 
 export async function ensureDir(p: string) { await fsp.mkdir(p, { recursive: true }); }

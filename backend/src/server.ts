@@ -40,8 +40,15 @@ function printRoutes(app: Application) {
 
 const server = http.createServer(app);
 
-server.listen(env.PORT, () => {
-  console.log(`Server listening on http://localhost:${env.PORT}`);
+// server.listen(env.PORT, () => {
+//   console.log(`Server listening on http://localhost:${env.PORT}`);
+//   printRoutes(app);
+// });
+
+// Bind to loopback to avoid EACCES on Windows; Docker: DOCKER=true -> 0.0.0.0
+const HOST = process.env.DOCKER ? "0.0.0.0" : "127.0.0.1";
+server.listen(env.PORT, HOST, () => {
+  console.log(`Server listening on http://${HOST}:${env.PORT}`);
   printRoutes(app);
 });
 
