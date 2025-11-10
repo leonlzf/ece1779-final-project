@@ -4,11 +4,11 @@ import path from "path";
 import { env } from "../../config/env";
 
 export const FILE_ROOT =
-  process.env.FILE_ROOT ||
-  path.resolve(__dirname, "../../../../data/files");
+  env.UPLOAD_DIR || path.resolve(__dirname, "../../../../data/files");
 
 fs.mkdirSync(FILE_ROOT, { recursive: true });
 
+console.log("FILE_ROOT = ", FILE_ROOT);
 
 export async function ensureDir(p: string) { await fsp.mkdir(p, { recursive: true }); }
 
