@@ -30,7 +30,13 @@ export async function register(req: Request, res: Response) {
     );
 
     
-    return res.status(201).json({ token: signToken(id) });
+    return res.status(201).json({
+      token: signToken(id),
+      user: {
+        id,
+        email,
+      },
+    });
   } catch (err) {
     console.error("Register error:", err);
     return res.status(500).json({ message: "server error" });
@@ -57,7 +63,13 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json({ message: "invalid credentials" });
     }
 
-    return res.json({ token: signToken(user.id) });
+    return res.json({
+      token: signToken(user.id),
+      user: {
+        id: user.id,
+        email,
+      },
+    });
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "server error" });

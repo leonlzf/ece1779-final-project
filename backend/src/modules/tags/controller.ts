@@ -1,32 +1,6 @@
 import { Request, Response } from "express";
-import { pool } from "../../utils/db";
-
-/**
- * Create or find tags by names, return rows.
- * This helper ensures idempotency (unique by lower(name)).
- */
-async function ensureTags(client: any, names: string[]): Promise<{ id: number; name: string }[]> {
-  const trimmed = Array.from(
-    new Set(names.map((n) => n.trim()).filter((n) => n.length > 0))
-  );
-  if (trimmed.length === 0) return [];
-
-  // Upsert each tag; keep it simple for clarity.
-  const results: { id: number; name: string }[] = [];
-  for (const name of trimmed) {
-    const { rows } = await client.query(
-      `
-      INSERT INTO tags(name)
-      VALUES ($1)
-      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-      RETURNING id, name
-      `,
-      [name]
-    );
-    results.push(rows[0]);
-  }
-  return results;
-}
+import { pool } from "../../db";
+import { QueryResult } from "pg";
 
 /**
  * GET /tags?q=partial
@@ -35,56 +9,51 @@ async function ensureTags(client: any, names: string[]): Promise<{ id: number; n
 export async function searchTags(req: Request, res: Response) {
   const q = (req.query.q as string) || "";
   try {
-    const { rows } = await pool.query(
-      q
-        ? `SELECT id, name FROM tags WHERE lower(name) LIKE lower($1) ORDER BY name ASC LIMIT 50`
-        : `SELECT id, name FROM tags ORDER BY name ASC LIMIT 50`,
-      q ? [`%${q}%`] : []
-    );
-    res.json({ items: rows });
+    const sql = q
+      ? `SELECT file_id, tag FROM files
+         WHERE tag IS NOT NULL 
+         AND LOWER(tag) LIKE LOWER($1)
+         ORDER BY tag ASC
+         LIMIT 200`
+      : `SELECT file_id, tag FROM files
+         WHERE tag IS NOT NULL
+         ORDER BY tag ASC
+         LIMIT 200`;
+
+    const { rows } = await pool.query(sql, q ? [`%${q}%`] : []);
+
+    res.json({
+      items: rows.map((r) => ({
+        fileId: r.file_id,
+        tag: r.tag,
+      })),
+    });
   } catch (err) {
     console.error("searchTags error:", err);
     res.status(500).json({ error: "Failed to search tags" });
   }
 }
 
+
 /**
  * PUT /files/:id/tags
  * Replace all tags for a file. Body: { tags: string[] }
  */
+ 
 export async function replaceFileTags(req: Request, res: Response) {
   const fileId = req.params.id;
-  const body = req.body as { tags?: string[] };
-  const tags = Array.isArray(body.tags) ? body.tags : [];
+  const body = req.body as { tag?: string };
+  const tag = (body.tag || "").trim();
 
-  // Optional: check permission here if you have an auth middleware context
-  // e.g. only owner/editor can modify tags
-
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
-    const tagRows = await ensureTags(client, tags);
-
-    // Clear existing relations
-    await client.query(`DELETE FROM file_tags WHERE file_id = $1`, [fileId]);
-
-    // Re-insert relations
-    for (const t of tagRows) {
-      await client.query(
-        `INSERT INTO file_tags(file_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [fileId, t.id]
-      );
-    }
-
-    await client.query("COMMIT");
-    res.json({ fileId, tags: tagRows.map((t) => t.name) });
+    await pool.query(
+      `UPDATE files SET tag = $1 WHERE file_id = $2`,
+      [tag, fileId]
+    );
+    res.json({ fileId, tag });
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error("replaceFileTags error:", err);
-    res.status(500).json({ error: "Failed to update tags for file" });
-  } finally {
-    client.release();
+    res.status(500).json({ error: "Failed to update tag for file" });
   }
 }
 
@@ -94,58 +63,19 @@ export async function replaceFileTags(req: Request, res: Response) {
  */
 export async function patchFileTags(req: Request, res: Response) {
   const fileId = req.params.id;
-  const body = req.body as { add?: string[]; remove?: string[] };
-  const toAdd = Array.isArray(body.add) ? body.add : [];
-  const toRemove = Array.isArray(body.remove) ? body.remove : [];
+  const body = req.body as { tag?: string | null };
+  const tag =
+    body.tag === null ? null : (body.tag || "").trim() || null;
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
-    // Handle remove
-    if (toRemove.length > 0) {
-      await client.query(
-        `
-        DELETE FROM file_tags
-        WHERE file_id = $1 AND tag_id IN (
-          SELECT id FROM tags WHERE name = ANY($2)
-        )
-        `,
-        [fileId, toRemove]
-      );
-    }
-
-    // Handle add
-    if (toAdd.length > 0) {
-      const tagRows = await ensureTags(client, toAdd);
-      for (const t of tagRows) {
-        await client.query(
-          `INSERT INTO file_tags(file_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-          [fileId, t.id]
-        );
-      }
-    }
-
-    await client.query("COMMIT");
-
-    // Return the final tag list
-    const { rows } = await pool.query(
-      `
-      SELECT t.name
-      FROM file_tags ft
-      JOIN tags t ON t.id = ft.tag_id
-      WHERE ft.file_id = $1
-      ORDER BY t.name ASC
-      `,
-      [fileId]
+    await pool.query(
+      `UPDATE files SET tag = $1 WHERE file_id = $2`,
+      [tag, fileId]
     );
-    res.json({ fileId, tags: rows.map((r) => r.name) });
+    res.json({ fileId, tag });
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error("patchFileTags error:", err);
-    res.status(500).json({ error: "Failed to patch tags for file" });
-  } finally {
-    client.release();
+    res.status(500).json({ error: "Failed to patch tag for file" });
   }
 }
 
@@ -157,18 +87,17 @@ export async function getFileTags(req: Request, res: Response) {
   const fileId = req.params.id;
   try {
     const { rows } = await pool.query(
-      `
-      SELECT t.id, t.name
-      FROM file_tags ft
-      JOIN tags t ON t.id = ft.tag_id
-      WHERE ft.file_id = $1
-      ORDER BY t.name ASC
-      `,
+      `SELECT tag FROM files WHERE file_id = $1`,
       [fileId]
     );
-    res.json({ items: rows });
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "File not found" });
+    }
+    res.json({ fileId, tag: rows[0].tag });
   } catch (err) {
     console.error("getFileTags error:", err);
-    res.status(500).json({ error: "Failed to load file tags" });
+    res.status(500).json({ error: "Failed to load file tag" });
   }
 }
+
+

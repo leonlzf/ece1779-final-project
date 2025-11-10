@@ -43,6 +43,13 @@ export async function createFile(req: Request, res: Response) {
     const ver = 1;
     const dst = versionPath(fileId, ver, req.file.originalname);
     await ensureDir(path.dirname(dst));
+    console.log("writing to", dst);
+    try {
+  fs.renameSync(req.file.path, dst);
+  console.log("rename ok, file moved successfully");
+} catch (e) {
+  console.error("rename error:", e);
+}
     fs.renameSync(req.file.path, dst);
 
     const sizeBytes = fs.statSync(dst).size;

@@ -10,6 +10,7 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET || "dev-secret-key",
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
 
-  UPLOAD_DIR: process.env.UPLOAD_DIR || path.resolve(__dirname, "../../data/files"),
+  UPLOAD_DIR: process.env.UPLOAD_DIR || "/mnt/volume_files",
+
   CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
 };

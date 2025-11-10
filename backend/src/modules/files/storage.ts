@@ -3,8 +3,8 @@ import fs from "fs";
 import path from "path";
 import { env } from "../../config/env";
 
-export const FILE_ROOT =
-  env.UPLOAD_DIR || path.resolve(__dirname, "../../../../data/files");
+export const FILE_ROOT = process.env.FILE_ROOT || "/mnt/volume_files";
+
 
 fs.mkdirSync(FILE_ROOT, { recursive: true });
 
@@ -21,7 +21,8 @@ export async function nextVersion(fileId: string) {
 }
 
 export function versionPath(fileId: string, ver: number, original: string) {
-  return path.join(FILE_ROOT, fileId, String(ver), original);
+ return path.posix.join(FILE_ROOT, fileId, String(ver), original);
+
 }
 
 export async function listFileIds() {
