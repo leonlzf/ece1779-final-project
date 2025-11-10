@@ -3,24 +3,10 @@ import crypto from "crypto";
 import { broadcastComment } from "../../realtime/sse";
 import path from "path";
 import fs from "fs/promises";
+import { pool } from "../../db";
+import { QueryResult } from "pg";
 
-const COMMENTS_ROOT = path.join(process.cwd(), "data", "comments");
 
-async function loadThread(fileId: string, ver: number) {
-  const p = path.join(COMMENTS_ROOT, `${fileId}@${ver}.json`);
-  try {
-    const txt = await fs.readFile(p, "utf-8");
-    return JSON.parse(txt) as Comment[];
-  } catch {
-    return [];
-  }
-}
-
-async function saveThread(fileId: string, ver: number, arr: Comment[]) {
-  await fs.mkdir(COMMENTS_ROOT, { recursive: true });
-  const p = path.join(COMMENTS_ROOT, `${fileId}@${ver}.json`);
-  await fs.writeFile(p, JSON.stringify(arr, null, 2));
-}
 
 
 /**
@@ -40,25 +26,17 @@ type Anchor =
  */
 type Comment = {
   id: string;
-  fileId: string;
-  versionNo: number;
-  parentId: string | null;
-  userId: string;
+  file_id: string;
+  version_no: number;
+  parent_id: string | null;
+  user_id: string;
   text: string;
-  anchor?: Anchor;
-  isResolved: boolean;
-  createdAt: string;
-  updatedAt: string;
+  anchor: Anchor | null;
+  is_resolved: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
-/**
- * In-memory storage: key = "fileId@versionNo"
- */
-const store = new Map<string, Comment[]>();
-
-function key(fileId: string, versionNo: number) {
-  return `${fileId}@${versionNo}`;
-}
 
 function getUser(req: Request) {
   return (req as any).user as { id: string; role: "OWNER" | "COLLAB" | "VIEWER" } | undefined;
@@ -76,9 +54,61 @@ function mustWritable(role: Role) {
   }
 }
 
+
+export async function create(req: Request, res: Response) {
+  try {
+    const user = getUser(req);
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    mustWritable(user.role);
+
+    const { id, ver } = req.params;
+    const versionNo = Number(ver);
+    const { text, parentId, anchor } = req.body ?? {};
+
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "text required" });
+    }
+
+    const commentId = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+
+    const insertQuery = `
+      INSERT INTO comments (
+        id, file_id, version_no, parent_id, user_id, text, anchor, is_resolved, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, $8)
+      RETURNING *;
+    `;
+
+    const result = await pool.query(insertQuery, [
+      commentId,
+      id,
+      versionNo,
+      parentId ?? null,
+      user.id,
+      text.trim(),
+      anchor ? JSON.stringify(anchor) : null,
+      createdAt
+    ]);
+
+    const comment = result.rows[0];
+
+    broadcastComment(id, versionNo, "comment:created", comment);
+    return res.json(comment);
+  } catch (e: any) {
+    if (e.code === "23503") {
+  
+      return res.status(400).json({ error: "Invalid file_id or user_id" });
+    }
+    if (e.code === 403) {
+      return res.status(403).json({ error: "Permission denied" });
+    }
+    return res.status(500).json({ error: "Create failed" });
+  }
+}
+
 /**
  * Create a new comment or reply
- */
+ 
 export async function create(req: Request, res: Response) {
   try {
     const user = getUser(req);
@@ -123,38 +153,61 @@ export async function create(req: Request, res: Response) {
     return res.status(500).json({ error: "Create failed" });
   }
 }
-
+*/
 /**
  * List all comments for a specific file version (threaded)
  */
 export async function list(req: Request, res: Response) {
-  const { id, ver } = req.params;
-  const versionNo = Number(ver);
-  // const k = key(id, versionNo);
-  // const arr = store.get(k) ?? [];
-  const arr = await loadThread(id, versionNo);
+  try {
+    const { id, ver } = req.params;
+    const versionNo = parseInt(ver, 10);
 
-  // Build a threaded structure (root comment + replies)
-  const node = new Map<string, any>();
-  const roots: any[] = [];
-  for (const c of arr) node.set(c.id, { ...c, replies: [] });
+    console.log(">>> list() called");
+    console.log("file_id:", id, "version_no:", versionNo);
 
-  for (const c of arr) {
-    if (c.parentId) {
-      node.get(c.parentId)?.replies.push(node.get(c.id));
-    } else {
-      roots.push(node.get(c.id));
+    const query = `
+      SELECT id, file_id, version_no, parent_id, user_id, text,
+             anchor, is_resolved, created_at, updated_at
+      FROM comments
+      WHERE file_id = $1 AND version_no = $2
+      ORDER BY created_at ASC;
+    `;
+
+    const result = await pool.query(query, [id, versionNo]);
+    console.log("rowCount:", result.rowCount);
+
+    const rows = result.rows.map((c) => ({
+      ...c,
+      parent_id: c.parent_id && c.parent_id.trim() !== "" ? c.parent_id : null,
+    }));
+
+    const node = new Map<string, any>();
+    const roots: any[] = [];
+
+    for (const c of rows) node.set(c.id, { ...c, replies: [] });
+
+    for (const c of rows) {
+      if (c.parent_id && node.has(c.parent_id)) {
+        node.get(c.parent_id).replies.push(node.get(c.id));
+      } else {
+        roots.push(node.get(c.id));
+      }
     }
+
+    roots.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    for (const r of roots)
+      r.replies.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+
+    console.log("roots length:", roots.length);
+    return res.json(roots);
+  } catch (err) {
+    console.error("List comments failed:", err);
+    return res.status(500).json({ error: "List failed" });
   }
-
-  // Sort by creation time
-  roots.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  roots.forEach(t =>
-    t.replies.sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt))
-  );
-
-  return res.json(roots);
 }
+
+
+
 
 /**
  * Update a comment (author or OWNER only)
@@ -166,49 +219,37 @@ export async function update(req: Request, res: Response) {
 
     const { commentId } = req.params;
     const { text } = req.body ?? {};
+
     if (!text || typeof text !== "string" || !text.trim()) {
       return res.status(400).json({ error: "text required" });
     }
+    const findQuery = `SELECT * FROM comments WHERE id = $1`;
+    const found = await pool.query(findQuery, [commentId]);
 
-    // for (const [, arr] of store) {
-    //   const idx = arr.findIndex(c => c.id === commentId);
-    //   if (idx >= 0) {
-    //     const c = arr[idx];
-    //     if (c.userId !== user.id && user.role !== "OWNER") {
-    //       return res.status(403).json({ error: "Permission denied" });
-    //     }
-    //     const updated = { ...c, text: text.trim(), updatedAt: new Date().toISOString() };
-    //     arr[idx] = updated;
-        
-    //     // NEW: realtime broadcast (SSE)
-    //     broadcastComment(c.fileId, c.versionNo, "comment:updated", updated);
-
-    //     return res.json(updated);
-    //   }
-    // }
-    const files = await fs.readdir(COMMENTS_ROOT).catch(() => []);
-    for (const fname of files) {
-      if (!fname.endsWith(".json")) continue;
-      const [fileId, verPart] = fname.replace(".json", "").split("@");
-      const versionNo = Number(verPart);
-      const arr = await loadThread(fileId, versionNo);
-      const idx = arr.findIndex(c => c.id === commentId);
-      if (idx < 0) continue;
-
-      const c = arr[idx];
-      if (c.userId !== user.id && user.role !== "OWNER") {
-        return res.status(403).json({ error: "Permission denied" });
-      }
-      const updated = { ...c, text: text.trim(), updatedAt: new Date().toISOString() };
-      arr[idx] = updated;
-      await saveThread(fileId, versionNo, arr);
-
-      broadcastComment(fileId, versionNo, "comment:updated", updated);
-      return res.json(updated);
+    if (found.rowCount === 0) {
+      return res.status(404).json({ error: "Comment not found" });
     }
 
-    return res.status(404).json({ error: "Comment not found" });
-  } catch {
+    const comment = found.rows[0];
+
+    if (comment.user_id !== user.id && user.role !== "OWNER") {
+      return res.status(403).json({ error: "Permission denied" });
+    }
+
+    const updatedAt = new Date().toISOString();
+    const updateQuery = `
+      UPDATE comments
+      SET text = $1, updated_at = $2
+      WHERE id = $3
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [text.trim(), updatedAt, commentId]);
+    const updated = result.rows[0];
+    broadcastComment(updated.file_id, updated.version_no, "comment:updated", updated);
+
+    return res.json(updated);
+  } catch (err) {
+    console.error("Update comment failed:", err);
     return res.status(500).json({ error: "Update failed" });
   }
 }
@@ -220,60 +261,33 @@ export async function remove(req: Request, res: Response) {
   try {
     const user = getUser(req);
     if (!user) return res.status(401).json({ error: "Unauthorized" });
-    
+
     const { commentId } = req.params;
 
-    // for (const [k, arr] of store) {
-    //   const idx = arr.findIndex(c => c.id === commentId);
-    //   if (idx >= 0) {
-    //     const c = arr[idx];
-    //     if (c.userId !== user.id && user.role !== "OWNER") {
-    //       return res.status(403).json({ error: "Permission denied" });
-    //     }
-    //     // Delete itself
-    //     arr.splice(idx, 1);
-    //     // Cascade delete its replies
-    //     for (let i = arr.length - 1; i >= 0; i--) {
-    //       if (arr[i].parentId === commentId) arr.splice(i, 1);
-    //     }
-    //     store.set(k, arr);
-        
-    //     // NEW: realtime broadcast (SSE)
-    //     broadcastComment(c.fileId, c.versionNo, "comment:deleted", { id: c.id });
+    const findQuery = `SELECT * FROM comments WHERE id = $1`;
+    const found = await pool.query(findQuery, [commentId]);
 
-    //     return res.json({ success: true });
-    //   }
-    // }
-
-     const files = await fs.readdir(COMMENTS_ROOT).catch(() => []);
-    for (const fname of files) {
-      if (!fname.endsWith(".json")) continue;
-      const [fileId, verPart] = fname.replace(".json", "").split("@");
-      const versionNo = Number(verPart);
-
-      const arr = await loadThread(fileId, versionNo);
-      const idx = arr.findIndex(c => c.id === commentId);
-      if (idx < 0) continue;
-
-      const c = arr[idx];
-      if (c.userId !== user.id && user.role !== "OWNER") {
-        return res.status(403).json({ error: "Permission denied" });
-      }
-
-      // delete self
-      arr.splice(idx, 1);
-      // cascade delete replies
-      for (let i = arr.length - 1; i >= 0; i--) {
-        if (arr[i].parentId === commentId) arr.splice(i, 1);
-      }
-
-      await saveThread(fileId, versionNo, arr);
-      broadcastComment(fileId, versionNo, "comment:deleted", { id: c.id });
-      return res.json({ success: true });
+    if (found.rowCount === 0) {
+      return res.status(404).json({ error: "Comment not found" });
     }
-    
-    return res.status(404).json({ error: "Comment not found" });
-  } catch {
+
+    const comment = found.rows[0];
+    if (comment.user_id !== user.id && user.role !== "OWNER") {
+      return res.status(403).json({ error: "Permission denied" });
+    }
+
+    const cascadeQuery = `
+      DELETE FROM comments
+      WHERE id = $1 OR parent_id = $1;
+    `;
+    await pool.query(cascadeQuery, [commentId]);
+
+    broadcastComment(comment.file_id, comment.version_no, "comment:deleted", { id: commentId });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Delete comment failed:", err);
     return res.status(500).json({ error: "Delete failed" });
   }
 }
+

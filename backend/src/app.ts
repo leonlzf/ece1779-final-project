@@ -55,11 +55,7 @@ app.use("/auth", authRouter);
  * - For EventSource, we keep CORS wide open here to simplify testing across file:// and localhost.
  * - These handlers must flush and keep the connection alive; do not wrap them with global CORS that blocks.
  */
-app.get(
-  "/files/:id/versions/:ver/comments",
-  cors({ origin: (_o, cb) => cb(null, true) }), // allow any origin for history (static fetch)
-  historyList
-);
+
 
 app.get(
   "/files/:id/versions/:ver/comments/stream",
