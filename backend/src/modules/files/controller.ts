@@ -371,3 +371,58 @@ if (!(await checkPermission(id, userId, "read"))) {
     return res.status(500).json({ success: false, message: "failed to read file metadata" });
   }
 }
+
+
+// DELETE /files/:id
+export async function deleteFile(req: Request & { user?: { id: string } }, res: Response) {
+  const fileId = req.params.id;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, message: "unauthenticated" });
+  }
+
+  const perm = await pool.query(
+    `SELECT 1
+       FROM file_permissions
+      WHERE file_id = $1 AND user_id = $2 AND can_delete = true`,
+    [fileId, userId]
+  );
+  if ((perm.rowCount ?? 0) === 0) {
+    return res.status(403).json({ success: false, message: "no delete permission" });
+  }
+
+  const exists = await pool.query(
+    `SELECT 1 FROM files WHERE file_id = $1`,
+    [fileId]
+  );
+  if ((exists.rowCount ?? 0) === 0) {
+    return res.status(404).json({ success: false, message: "file not found" });
+  }
+
+  const dir = path.join(FILE_ROOT, fileId);
+
+  try {
+    await fsp.rm(dir, { recursive: true, force: true });
+  } catch (e) {
+    console.error("rm dir error:", e);
+  }
+
+  // versions → permissions → files
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(`DELETE FROM file_versions   WHERE file_id = $1`, [fileId]);
+    await client.query(`DELETE FROM file_permissions WHERE file_id = $1`, [fileId]);
+    await client.query(`DELETE FROM files           WHERE file_id = $1`, [fileId]);
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("deleteFile tx error:", err);
+    return res.status(500).json({ success: false, message: "failed to delete file" });
+  } finally {
+    client.release();
+  }
+
+  return res.status(204).end();
+}

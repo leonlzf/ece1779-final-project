@@ -36,6 +36,8 @@ app.use(
     credentials: true,
   })
 );
+app.options("*", cors());
+app.use(express.static(path.join(__dirname, "..", "public")));
 
 // Body parsers
 app.use(express.json({ limit: "10mb" }));
