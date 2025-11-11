@@ -9,7 +9,7 @@ import { pool } from "../../db";
 import { ensureDir, nextVersion, versionPath, FILE_ROOT } from "./storage";
 
 
-async function checkPermission(
+export async function checkPermission(
   fileId: string,
   userId: string,
   required: "read" | "write" | "delete" = "read"

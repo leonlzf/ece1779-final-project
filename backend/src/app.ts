@@ -8,6 +8,7 @@ import { env } from "./config/env";
 import { requireAuth } from "./middleware/auth";
 import { authRouter } from "./modules/auth/routes";
 import { filesRouter } from "./modules/files/routes";
+import { versionsRouter } from "./modules/version/routes";
 import { commentsRouter } from "./modules/comments/routes";
 import { commentsStream, historyList } from "./realtime/sse";
 import { tagsRouter } from "./modules/tags/routes";
@@ -74,6 +75,8 @@ app.use("/", commentsRouter);
 app.use("/", tagsRouter);   // /tags, /files/:id/tags (PUT/PATCH/GET)
 app.use("/", searchRouter); // /search/files
 
+
+app.use("/", versionsRouter);
 // 404 fallback
 app.use((req, res) => {
   res.status(404).json({ success: false, error: "Route not found" });
