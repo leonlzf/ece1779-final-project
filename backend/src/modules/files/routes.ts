@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import { requireAuth } from "../../middleware/auth";
-import { createFile, addVersion, listFiles, downloadVersion, getFileMeta, deleteFile } from "./controller";
+import { createFile, addVersion, listFiles, downloadVersion, getFileMeta, deleteFile ,  shareFile} from "./controller";
 
 const upload = multer({
   dest: path.join(process.cwd(), "tmp_uploads"),
@@ -16,5 +16,5 @@ filesRouter.post("/:id/versions", upload.single("file"), addVersion);
 filesRouter.get("/", listFiles);
 filesRouter.get("/:id/versions/:ver/download", downloadVersion);
 filesRouter.get("/:id", getFileMeta);
-
+filesRouter.post("/:id/share", shareFile);
 filesRouter.delete("/:id", deleteFile);

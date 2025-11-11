@@ -364,3 +364,105 @@ export async function deleteFile(
 
   return res.status(204).end();
 }
+/**
+ * share a file with another user
+ * @param req 
+ * @param res 
+ * @returns 
+ */
+export async function shareFile(
+  req: Request & { user?: { id: string } },
+  res: Response
+) {
+  try {
+    const { id } = req.params; // file_id
+    const { targetEmail, role } = req.body;
+    const userId = req.user?.id;
+
+
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "unauthenticated" });
+    }
+
+    if (!targetEmail || !role) {
+      return res
+        .status(400)
+        .json({ success: false, message: "targetEmail and role are required" });
+    }
+
+    const permCheck = await pool.query(
+      `SELECT 1 FROM file_permissions WHERE file_id = $1 AND user_id = $2 AND can_delete = true`,
+      [id, userId]
+    );
+    console.log("permCheck result:", permCheck.rowCount);
+
+    if ((permCheck.rowCount ?? 0) === 0) {
+      return res
+        .status(403)
+        .json({ success: false, message: "only OWNER can share this file" });
+    }
+
+    const targetUser = await pool.query(
+      `SELECT id, email FROM users WHERE email = $1`,
+      [targetEmail]
+    );
+    console.log("targetUser result:", targetUser.rows);
+
+    if (targetUser.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "target user not found" });
+    }
+
+    const targetId = targetUser.rows[0].id;
+
+
+    if (targetId === userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "cannot share file with yourself" });
+    }
+
+    let can_read = true;
+    let can_write = false;
+    let can_delete = false;
+
+    if (role === "OWNER") {
+      can_write = true;
+      can_delete = true;
+    } else if (role === "COLLAB") {
+      can_write = true;
+    } else if (role === "VIEWER") {
+    } else {
+      return res
+        .status(400)
+        .json({ success: false, message: "invalid role" });
+    }
+
+
+    await pool.query(
+      `INSERT INTO file_permissions (file_id, user_id, can_read, can_write, can_delete)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (file_id, user_id)
+       DO UPDATE SET can_read = EXCLUDED.can_read, 
+                     can_write = EXCLUDED.can_write, 
+                     can_delete = EXCLUDED.can_delete`,
+      [id, targetId, can_read, can_write, can_delete]
+    );
+
+    console.log("✅ shareFile success");
+    return res.json({
+      success: true,
+      fileId: id,
+      sharedWith: targetEmail,
+      role,
+    });
+  } catch (err) {
+    console.error("shareFile error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "failed to share file", error: String(err) });
+  }
+}
+
