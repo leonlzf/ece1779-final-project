@@ -170,7 +170,8 @@ export async function listFiles(
   try {
     const userId = req.user?.id;
     const result = await pool.query(
-      `SELECT f.file_id, f.name, f.latest_version, f.tag, f.created_at
+      `SELECT f.file_id, f.name, f.latest_version, f.tag, f.created_at,
+              p.can_read, p.can_write, p.can_delete
        FROM files f
        JOIN file_permissions p ON f.file_id = p.file_id
        WHERE p.user_id = $1 AND p.can_read = true
@@ -180,13 +181,20 @@ export async function listFiles(
 
     return res.json({
       success: true,
-      files: result.rows.map((row) => ({
-        fileId: row.file_id,
-        name: row.name,
-        tag: row.tag,
-        latestVersion: row.latest_version,
-        createdAt: row.created_at,
-      })),
+      files: result.rows.map((row) => {
+        let role = "VIEWER";
+        if (row.can_delete) role = "OWNER";
+        else if (row.can_write) role = "COLLAB";
+
+        return {
+          fileId: row.file_id,
+          name: row.name,
+          tag: row.tag,
+          latestVersion: row.latest_version,
+          createdAt: row.created_at,
+          role,
+        };
+      }),
     });
   } catch (err) {
     console.error("listFiles error:", err);
@@ -195,6 +203,7 @@ export async function listFiles(
       .json({ success: false, message: "failed to list files" });
   }
 }
+
 
 export async function downloadVersion(req: Request, res: Response) {
   try {
@@ -290,6 +299,7 @@ export async function getFileMeta(req: Request, res: Response) {
       name: latest.name,
       tag: file.tag,
       latestVersion: file.latest_version,
+      sizeBytes: latest.sizeBytes,
       createdAt: file.created_at,
       versions,
     });
@@ -466,3 +476,145 @@ export async function shareFile(
   }
 }
 
+/**
+ * Edit a file if it's of an editable type
+ * @param req 
+ * @param res 
+ * @returns 
+ */
+export async function editFile(
+  req: Request & { user?: { id: string } },
+  res: Response
+) {
+  try {
+    const { id, ver } = req.params;
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ success: false, message: "unauthenticated" });
+
+    const { rows } = await pool.query(
+      `SELECT name FROM file_versions WHERE file_id=$1 AND version_no=$2`,
+      [id, ver]
+    );
+    if (!rows.length)
+      return res.status(404).json({ success: false, message: "file not found" });
+
+    const filename = rows[0].name;
+    const filePath = path.join(FILE_ROOT, id, ver, filename);
+    const ext = path.extname(filename).toLowerCase();
+
+    if (ext === ".pdf") {
+      if (!(await checkPermission(id, userId, "read"))) {
+        return res
+          .status(403)
+          .json({ success: false, message: "no read permission" });
+      }
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+      const stream = fs.createReadStream(filePath);
+      return stream.pipe(res);
+    }
+
+
+    const canRead = await checkPermission(id, userId, "read");
+    if (!canRead) {
+      return res
+        .status(403)
+        .json({ success: false, message: "no read permission" });
+    }
+
+    const canWrite = await checkPermission(id, userId, "write");
+
+    if (ext === ".txt" || ext === ".md" || ext === ".json") {
+      const content = await fsp.readFile(filePath, "utf-8");
+      return res.json({
+        success: true,
+        editable: canWrite, 
+        type: "text",
+        content,
+      });
+    }
+
+    if (ext === ".docx") {
+      const buffer = await fsp.readFile(filePath);
+      const base64 = buffer.toString("base64");
+      return res.json({
+        success: true,
+        editable: canWrite,
+        type: "docx",
+        content: base64,
+      });
+    }
+
+    return res.json({
+      success: false,
+      message: `file type ${ext} not supported for viewing`,
+    });
+  } catch (err) {
+    console.error("editFile error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "failed to open file" });
+  }
+}
+
+
+/**
+ * save edited file content
+ * @param req 
+ * @param res 
+ * @returns 
+ */
+export async function saveFile(
+  req: Request & { user?: { id: string } },
+  res: Response
+) {
+  try {
+    const { id, ver } = req.params;
+    const userId = req.user?.id;
+    const { content } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "unauthenticated" });
+    }
+
+    if (!content) {
+      return res.status(400).json({ success: false, message: "content required" });
+    }
+
+    const canWrite = await checkPermission(id, userId, "write");
+    if (!canWrite) {
+      return res.status(403).json({ success: false, message: "no write permission" });
+    }
+
+  
+    const { rows } = await pool.query(
+      `SELECT name FROM file_versions WHERE file_id=$1 AND version_no=$2`,
+      [id, ver]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: "file not found" });
+    }
+
+    const filename = rows[0].name;
+    const filePath = path.join(FILE_ROOT, id, ver, filename);
+    const ext = path.extname(filename).toLowerCase();
+
+
+    if (ext === ".txt" || ext === ".md" || ext === ".json") {
+      await fsp.writeFile(filePath, content, "utf-8");
+    } else if (ext === ".docx") {
+      const buffer = Buffer.from(content, "base64");
+      await fsp.writeFile(filePath, buffer);
+    } else {
+      return res.json({ success: false, message: `file type ${ext} not supported for save` });
+    }
+
+    return res.json({ success: true, message: "file saved successfully" });
+  } catch (err) {
+    console.error("saveEditedFile error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "failed to save file" });
+  }
+}
