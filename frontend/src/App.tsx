@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
+import ViewerPage from "./pages/ViewerPage";
 import type { JSX } from "react";
 
 const router = createBrowserRouter([
@@ -10,6 +11,7 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/register", element: <RegisterPage /> },
   { path: "/dashboard", element: <Private><DashboardPage /></Private> },
+  { path: "/files/:id", element: <ViewerPage /> },
   { path: "*", element: <Navigate to="/login" replace /> },
 ]);
 

@@ -1,14 +1,49 @@
-import axios from "axios";
+// src/lib/axios.ts
+import axios, { type InternalAxiosRequestConfig } from "axios";
 
-const api = axios.create({ baseURL: "/api" });
+const api = axios.create({
+  baseURL: "/api",
+  withCredentials: true,
+});
 
-const t = localStorage.getItem("token");
-if (t) api.defaults.headers.Authorization = `Bearer ${t}`;
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const u = config.url ?? "";
+  const isAuthNoToken =
+    u.startsWith("/auth/login") || u.startsWith("/auth/register");
 
-api.interceptors.request.use(cfg => {
-  const tok = localStorage.getItem("token");
-  if (tok) cfg.headers.Authorization = `Bearer ${tok}`;
-  return cfg;
+  if (!isAuthNoToken) {
+    const raw = localStorage.getItem("token");
+    const token = raw && raw !== "undefined" && raw !== "null" ? raw : "";
+
+    if (token) {
+      const hdrs: any = config.headers ?? {};
+      if (typeof hdrs.set === "function") {
+        hdrs.set("Authorization", `Bearer ${token}`);
+      } else {
+        config.headers = { ...hdrs, Authorization: `Bearer ${token}` } as any;
+      }
+    } else {
+      const hdrs: any = config.headers;
+      if (hdrs) {
+        if (typeof hdrs.delete === "function") {
+          hdrs.delete("Authorization");
+        } else {
+          delete hdrs.Authorization;
+        }
+      }
+    }
+  } else {
+    const hdrs: any = config.headers;
+    if (hdrs) {
+      if (typeof hdrs.delete === "function") {
+        hdrs.delete("Authorization");
+      } else {
+        delete hdrs.Authorization;
+      }
+    }
+  }
+
+  return config;
 });
 
 export default api;
