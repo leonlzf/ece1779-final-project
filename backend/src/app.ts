@@ -26,11 +26,31 @@ const app = express();
  */
 app.use(
   cors({
-    origin(origin, cb) {
-      if (!origin) return cb(null, true);                 // allow non-browser tools
-      if (origin === env.CLIENT_URL) return cb(null, true);
+    // origin(origin, cb) {
+    //   if (!origin) return cb(null, true);                 // allow non-browser tools
+    //   if (origin === env.CLIENT_URL) return cb(null, true);
+    //   return cb(null, false);
+    // },
+
+     origin(origin, cb) {
+      
+      // allow non-browser
+      if (!origin) return cb(null, true);
+      
+      //default to dev environment
+      if (env.NODE_ENV === "development") {
+        return cb(null, true);
+      }
+      
+      //use frontend origin url for prod
+      if (origin === env.CLIENT_URL) {
+        return cb(null, true);
+      }
+      
+      //denied 
       return cb(null, false);
     },
+
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     exposedHeaders: ["Content-Disposition"],

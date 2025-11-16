@@ -12,5 +12,5 @@ export const env = {
 
   UPLOAD_DIR: process.env.UPLOAD_DIR || "/mnt/volume_files",
 
-  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:3000",
+  CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5221",
 };
