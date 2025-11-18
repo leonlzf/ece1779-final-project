@@ -405,7 +405,7 @@ export default function ViewerPage() {
     }
 
     try{
-      const response = await api.get("/files" + id + "/versions");
+       const response = await api.get(`/files/${id}/versions`);
 
       let list: VersionInfo[]=[];
 
@@ -470,7 +470,7 @@ async function handleRollbackVersion(ver: number) {
       newVer = response.data.newVersion;
     }
 
-
+    await reloadVersions();
 
     const params = new URLSearchParams(location.search);
     if (name) {
