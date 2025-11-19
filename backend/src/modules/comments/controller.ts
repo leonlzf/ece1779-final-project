@@ -176,9 +176,19 @@ export async function list(req: Request, res: Response) {
     const result = await pool.query(query, [id, versionNo]);
     console.log("rowCount:", result.rowCount);
 
+    // const rows = result.rows.map((c) => ({
+    //   ...c,
+    //   parent_id: c.parent_id && c.parent_id.trim() !== "" ? c.parent_id : null,
+    // }));
+
     const rows = result.rows.map((c) => ({
       ...c,
-      parent_id: c.parent_id && c.parent_id.trim() !== "" ? c.parent_id : null,
+      parent_id:
+        typeof c.parent_id === "string" && c.parent_id.trim() !== ""
+          ? c.parent_id
+          : null,
+      created_at: new Date(c.created_at).toISOString(),
+      updated_at: new Date(c.updated_at).toISOString(),
     }));
 
     const node = new Map<string, any>();
@@ -194,9 +204,19 @@ export async function list(req: Request, res: Response) {
       }
     }
 
-    roots.sort((a, b) => a.created_at.localeCompare(b.created_at));
-    for (const r of roots)
-      r.replies.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+    // roots.sort((a, b) => a.created_at.localeCompare(b.created_at));
+    // for (const r of roots)
+    //   r.replies.sort((a: any, b: any) => a.created_at.localeCompare(b.created_at));
+
+    roots.sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    for (const r of roots) {
+      r.replies.sort(
+        (a: any, b: any) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    }
 
     console.log("roots length:", roots.length);
     return res.json(roots);
