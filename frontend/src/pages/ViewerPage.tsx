@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { downloadFileApi, shareFileApi } from "../modulesAPI/files";
 import {
   listComments,
@@ -14,10 +14,19 @@ import api from "../lib/axios";
 import PdfLikeViewer from "../components/PdfLikeViewer";
 import { renderAsync } from "docx-preview";
 
+type VersionInfo = {
+  versionNo: number;
+  name: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
 type ViewState =
   | { kind: "loading" }
   | { kind: "ready"; url?: string; mime?: string }
   | { kind: "error"; message: string };
+  
 
 function extOf(name?: string) {
   if (!name) return "";
@@ -90,8 +99,9 @@ function renderHighlightedText(draft: string, comments: CommentItem[]) {
 export default function ViewerPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
+  const location = useLocation();
 
-  const qs = useMemo(() => new URLSearchParams(window.location.search), []);
+  const qs = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const name = qs.get("name") || undefined;
   const vRaw = qs.get("version");
   const version = vRaw ? Number(vRaw) || 1 : 1;
@@ -125,6 +135,11 @@ export default function ViewerPage() {
   const [newCommentText, setNewCommentText] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+
+  // hooks for versioning
+  const [versions, setVersions] = useState<VersionInfo[]>([]);
+  const [versionsLoad, setVersionsLoad] = useState(false);
+  const [versionsErr, setVersionsErr] = useState<string | null>(null);
 
   // ---------- load file ----------
   useEffect(() => {
@@ -204,6 +219,49 @@ export default function ViewerPage() {
     load();
   }, [id, version]);
 
+  // load versions
+  useEffect(() => {
+    if (!id){
+      return;
+    } 
+
+    const run = async () => {
+      setVersionsLoad(true);
+      setVersionsErr(null);
+      try {
+        const response = await api.get("/files/"+id+"/versions");
+
+        let list: VersionInfo[] = [];
+
+        if (response && response.data && response.data.versions) {
+          list = response.data.versions;
+        }
+
+        setVersions(list);
+      } catch (e: any) {
+        console.error("Failed to load versions:", e);
+        let msg = "Failed to load versions";
+
+        if (
+          e &&
+          e.response &&
+          e.response.data &&
+          e.response.data.message
+        ) {
+          msg = e.response.data.message;
+        }
+
+        setVersionsErr(msg);
+      } finally {
+
+
+        setVersionsLoad(false);
+      }
+    };
+
+    run();
+  }, [id]);
+
   // ---------- share ----------
   async function handleShareSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -229,9 +287,51 @@ export default function ViewerPage() {
 
   // ---------- save / replace ----------
   async function saveText() {
-    if (!id) return;
-    await api.put(`/files/${id}/versions/${version}/save`, { content: draft });
-    setDirty(false);
+    // if (!id) return;
+    // await api.put(`/files/${id}/versions/${version}/save`, { content: draft });
+    // setDirty(false);
+    if (!id) {
+      return;
+    }
+
+    try {
+      const response = await api.post("/files/" + id + "/versions/auto", {
+        content: draft,
+      });
+
+      let newVer = version;
+      if (
+        response &&
+        response.data &&
+        typeof response.data.versionNo === "number"
+      ) {
+        newVer = response.data.versionNo;
+      }
+      await reloadVersions();
+
+      const params = new URLSearchParams(location.search);
+      if (name) {
+        params.set("name", name);
+      }
+      params.set("version", String(newVer));
+
+      nav("/files/" + id + "?"+ params.toString());
+
+      setDirty(false);
+    } catch (e: any) {
+      let msg ="Failed to save new version";
+
+      if (
+        e &&
+        e.response &&
+        e.response.data &&
+        e.response.data.message
+      ) {
+        msg = e.response.data.message;
+      }
+      console.error("saveText error:", e);
+      alert(msg);
+    }
   }
 
   async function replaceDocx(file: File) {
@@ -291,11 +391,33 @@ export default function ViewerPage() {
     setSelectedAnchor(anchor);
   };
 
-  // ---------- comment helpers ----------
+  // ---------- comment and versioning helpers ----------
   async function reloadComments() {
     if (!id) return;
     const list = await listComments(id, version);
     setComments(list || []);
+  }
+
+  async function reloadVersions() {
+
+    if (!id){
+      return;
+    }
+
+    try{
+       const response = await api.get(`/files/${id}/versions`);
+
+      let list: VersionInfo[]=[];
+
+      if (response && response.data && response.data.versions) {
+        list = response.data.versions;
+      }
+      setVersions(list);
+    
+    } catch (e){
+      console.error("FAILED TO RELOAD VERSIONS: ", e);
+    }
+
   }
 
   async function handleAddComment() {
@@ -328,6 +450,57 @@ export default function ViewerPage() {
     await deleteComment(comment.id);
     await reloadComments();
   }
+  
+ // rollback version function
+async function handleRollbackVersion(ver: number) {
+  if (!id) {
+    return;
+  }
+
+  try {
+    const response = await api.post("/files/" + id + "/rollback/" + ver);
+
+    let newVer = ver;
+
+    if (
+      response &&
+      response.data &&
+      typeof response.data.newVersion === "number"
+    ) {
+      newVer = response.data.newVersion;
+    }
+
+    await reloadVersions();
+
+    const params = new URLSearchParams(location.search);
+    if (name) {
+      params.set("name", name);
+    }
+    params.set("version", String(newVer));
+    nav(`/files/${id}?${params.toString()}`);
+  } catch (err: any) {
+    
+    
+    let message = "FAILED TO ROLL BACK VERSION";
+
+    if (
+      err &&
+      err.response &&
+      err.response.data &&
+      err.response.data.message
+    ) {
+      message = err.response.data.message;
+    }
+
+    console.error("FAILED TO ROLLBACK VERSION ERROR:", err);
+
+
+
+    alert(message);
+  }
+}
+
+
 
   // ---------- toolbar ----------
   const Tools = (
@@ -504,7 +677,48 @@ export default function ViewerPage() {
           <div className="viewer__content">
             <div className="viewer__meta">
               <span className="viewer__name">{name || id}</span>
+
               {state.mime && <span className="viewer__mime">{state.mime}</span>}
+
+              <span>Version: {version}</span>
+
+              {versionsLoad && <span>Loading file versions…</span>}
+
+              {versionsErr && (
+                <span>{versionsErr}</span>
+              )}
+
+              {versions.length > 0 && (
+                <>
+                  <select
+                    value={version}
+                    onChange={(e) => {
+                      const v = Number(e.target.value) || 1;
+                      const params = new URLSearchParams();
+
+                      if (name) {
+                        params.set("name", name);
+                      }
+
+                      params.set("version", String(v));
+                      nav(`/files/${id}?${params.toString()}`);
+                    }}
+                  >
+                    {versions.map((v) => (
+                      <option key={v.versionNo} value={v.versionNo}>
+                        v{v.versionNo} – {v.uploadedBy}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => handleRollbackVersion(version)}
+                  >
+                    Rollback to this version
+                  </button>
+                </>
+              )}
             </div>
 
             {/* text editor / read-only with highlights */}

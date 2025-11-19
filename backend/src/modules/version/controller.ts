@@ -234,7 +234,7 @@ export async function rollbackVersion(
 
 
     const newVer = await nextVersion(id);
-    const newName = `rollback_from_v${ver}.txt`;
+    const newName = `${oldName}_v${ver}.txt`;
     const newPath = versionPath(id, newVer, newName);
     await ensureDir(path.dirname(newPath));
 

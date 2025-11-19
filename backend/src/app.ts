@@ -3,7 +3,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
 import { env } from "./config/env";
 import { requireAuth } from "./middleware/auth";
 import { authRouter } from "./modules/auth/routes";
@@ -26,11 +26,31 @@ const app = express();
  */
 app.use(
   cors({
-    origin(origin, cb) {
-      if (!origin) return cb(null, true);                 // allow non-browser tools
-      if (origin === env.CLIENT_URL) return cb(null, true);
+    // origin(origin, cb) {
+    //   if (!origin) return cb(null, true);                 // allow non-browser tools
+    //   if (origin === env.CLIENT_URL) return cb(null, true);
+    //   return cb(null, false);
+    // },
+
+     origin(origin, cb) {
+      
+      // allow non-browser
+      if (!origin) return cb(null, true);
+      
+      //default to dev environment
+      if (env.NODE_ENV === "development") {
+        return cb(null, true);
+      }
+      
+      //use frontend origin url for prod
+      if (origin === env.CLIENT_URL) {
+        return cb(null, true);
+      }
+      
+      //denied 
       return cb(null, false);
     },
+
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     exposedHeaders: ["Content-Disposition"],
