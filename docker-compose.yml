@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: projectdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123456
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app_net
+
+  backend:
+    image: ece1779-backend:latest
+    environment:
+      NODE_ENV: "production"
+      PORT: "8080"
+      DATABASE_URL: "postgresql://admin:123456@db:5432/projectdb"
+      DB_SSL: "false"
+
+      FILE_ROOT: "/mnt/project_1779_volume_tor1_01"
+      UPLOAD_DIR: "/mnt/project_1779_volume_tor1_01"
+
+      CLIENT_URL: "http://68.183.200.95"
+
+      JWT_SECRET: "698498efc7a8a4164fb4c715bbef0bfa71c48c463a21e39356a186ce0215e5c5"
+    volumes:
+      - files_data:/mnt/volume_files
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - app_net
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  frontend:
+    image: ece1779-frontend:latest
+    depends_on:
+      - backend
+    networks:
+      - app_net
+    ports:
+      - "80:80"
+
+volumes:
+  db_data:
+  files_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/ece1779_files
+
+networks:
+  app_net:
+    driver: overlay
