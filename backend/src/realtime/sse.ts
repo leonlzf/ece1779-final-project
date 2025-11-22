@@ -1,90 +1,139 @@
-import { Request, Response } from "express";
-import { EventEmitter } from "events";
-import jwt from "jsonwebtoken";
-import { env } from "../config/env"; 
-import fs from "fs/promises";
-import path from "path";
-const COMMENT_DIR = path.join(process.cwd(), "data", "comments");
+import type { Request, Response } from "express";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { env } from "../config/env";
 
-// very small pub/sub bus per fileId@version
-const bus = new EventEmitter();
-bus.setMaxListeners(1000);
+type CommentEventName = "comment:created" | "comment:updated" | "comment:deleted";
 
-function chan(fileId: string, versionNo: number) {
-  return `${fileId}@${versionNo}`;
+type SSEClient = {
+  res: Response;
+  userId: string;
+};
+
+type ChannelKey = string;
+
+const channels = new Map<ChannelKey, Set<SSEClient>>();
+
+function channelKey(fileId: string, versionNo: number) {
+  return `${fileId}:${versionNo}`;
 }
 
+function verifyToken(raw?: string | null): { userId: string } | null {
+  if (!raw) return null;
+  try {
+    const decoded = jwt.verify(raw, env.JWT_SECRET) as JwtPayload | string;
+
+    if (typeof decoded === "string") {
+      return { userId: decoded };
+    }
+
+    const userId =
+      (decoded as any).uid ||
+      (decoded as any).userId ||
+      (decoded as any).id ||
+      (decoded as any).sub;
+
+    if (!userId) return null;
+    return { userId: String(userId) };
+  } catch {
+    return null;
+  }
+}
+
+
 /**
- * SSE stream endpoint
+ * SSE endpoint:
  * GET /files/:id/versions/:ver/comments/stream?token=<JWT>
- * 
+ *
+ * in commentsRouter:
+ * commentsRouter.get("/files/:id/versions/:ver/comments/stream", commentsStream);
  */
 export function commentsStream(req: Request, res: Response) {
-  const { id, ver } = req.params;
-  const versionNo = Number(ver);
+  const fileId = req.params.id;
+  const versionNo = Number(req.params.ver);
 
-  // CORS for SSE
-  const origin = (req.headers.origin as string) || "*";
-  res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Vary", "Origin");
-
-  // lightweight auth here
-  const token = (req.query.token as string) || "";
-  try {
-    if (!token) throw new Error("Missing token");
-    jwt.verify(token, env.JWT_SECRET);
-  } catch {
-    return res.status(401).end("Invalid or missing token");
+  if (!fileId || Number.isNaN(versionNo)) {
+    res.status(400).json({ success: false, error: "Invalid file id or version" });
+    return;
   }
 
-  // SSE headers
+  const tokenFromQuery =
+    typeof req.query.token === "string" ? (req.query.token as string) : undefined;
+
+  const authHeader =
+    typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+  const tokenFromHeader = authHeader.startsWith("Bearer ")
+    ? authHeader.slice("Bearer ".length)
+    : undefined;
+
+  const auth = verifyToken(tokenFromQuery || tokenFromHeader || null);
+  if (!auth) {
+    res.status(401).json({ success: false, error: "Unauthorized" });
+    return;
+  }
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  const send = (type: string, payload: any) => {
-    res.write(`event: ${type}\n`);
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
-  };
-  send("ready", { channel: chan(id, versionNo) });
+  (res as any).flushHeaders?.();
 
-  const listener = (evt: { type: string; payload: any }) => {
-    send(evt.type, evt.payload);
-  };
-  bus.on(chan(id, versionNo), listener);
+  const key = channelKey(fileId, versionNo);
+  const client: SSEClient = { res, userId: auth.userId };
 
-  const heartbeat = setInterval(() => {
-    res.write(`:\n\n`);
+  if (!channels.has(key)) {
+    channels.set(key, new Set());
+  }
+  channels.get(key)!.add(client);
+
+  res.write(`event: connected\n`);
+  res.write(`data: ${JSON.stringify({ success: true })}\n\n`);
+
+  const pingInterval = setInterval(() => {
+    if (res.writableEnded) return;
+    res.write(`event: ping\n`);
+    res.write(`data: "ok"\n\n`);
   }, 25000);
 
-
   req.on("close", () => {
-    clearInterval(heartbeat);
-    bus.off(chan(id, versionNo), listener);
+    clearInterval(pingInterval);
+    const set = channels.get(key);
+    if (set) {
+      set.delete(client);
+      if (set.size === 0) {
+        channels.delete(key);
+      }
+    }
     res.end();
   });
 }
 
 /**
- * Called by controllers to broadcast realtime events.
+ * Broadcast a comment-related event to all SSE clients
+ * subscribed to the given fileId + versionNo channel.
+ *
+ * This is typically called from comments/controller.ts, e.g.:
+ *   broadcastComment(fileId, versionNo, "comment:created", createdComment);
  */
 export function broadcastComment(
   fileId: string,
   versionNo: number,
-  type: "comment:created" | "comment:updated" | "comment:deleted",
-  payload: any
+  event: CommentEventName,
+  payload: unknown
 ) {
-  bus.emit(chan(fileId, versionNo), { type, payload });
+  const key = channelKey(fileId, versionNo);
+  const set = channels.get(key);
+  if (!set || set.size === 0) return;
+
+  const data =
+    `event: ${event}\n` + `data: ${JSON.stringify(payload)}\n\n`;
+
+  for (const { res } of set) {
+    if (!res.writableEnded) {
+      res.write(data);
+    }
+  }
 }
 
-// Helper to read comments from disk
-export async function historyList(req: Request, res: Response) {
-  const { id, ver } = req.params;
-  const file = path.join(COMMENT_DIR, `${id}@${ver}.json`);
-  try {
-    const data = await fs.readFile(file, "utf-8");
-    res.json(JSON.parse(data));
-  } catch {
-    res.json([]); // no file → return empty array
-  }
+export function historyList(_req: Request, res: Response) {
+  res.status(501).json({ success: false, error: "Not implemented" });
 }
