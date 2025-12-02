@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { downloadFileApi, shareFileApi } from "../modulesAPI/files";
+import { openCommentsStream } from "../modulesAPI/commentsStream";
 import {
   listComments,
   createComment,
@@ -206,18 +207,39 @@ export default function ViewerPage() {
   }, [id, version, ext]);
 
   // ---------- load comments ----------
+  // ---------- live comments (load + SSE stream) ----------
   useEffect(() => {
-    const load = async () => {
-      if (!id) return;
+    if (!id) return;
+
+    let closeStream: (() => void) | null = null;
+
+    const setup = async () => {
       try {
+        // initial load
         const list = await listComments(id, version);
         setComments(list || []);
       } catch (err) {
         console.error("Failed to load comments:", err);
       }
+
+      // open SSE stream for this file + version
+      closeStream = openCommentsStream(id, version, {
+        onComments: (items) => setComments(items),
+        onError: (err) =>
+          console.error("Comments stream error:", err),
+      });
     };
-    load();
+
+    setup();
+
+    // cleanup when id/version changes or component unmounts
+    return () => {
+      if (closeStream) {
+        closeStream();
+      }
+    };
   }, [id, version]);
+
 
   // load versions
   useEffect(() => {
@@ -261,6 +283,7 @@ export default function ViewerPage() {
 
     run();
   }, [id]);
+
 
   // ---------- share ----------
   async function handleShareSubmit(e: React.FormEvent) {
