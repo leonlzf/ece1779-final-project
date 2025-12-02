@@ -8,10 +8,6 @@ type CommentStreamHandlers = {
   onError?: (err: any) => void;
 };
 
-/**
- * Open an SSE stream for a given file + version.
- * Returns a cleanup function that closes the stream.
- */
 export function openCommentsStream(
   fileId: string,
   version: number,
@@ -23,11 +19,10 @@ export function openCommentsStream(
     return () => {};
   }
 
-  // Build base URL (same logic as axios baseURL)
-  const base =
-    API_BASE.startsWith("http")
-      ? API_BASE
-      : `${window.location.origin}${API_BASE}`;
+  // Build base URL similar to axios baseURL
+  const base = API_BASE.startsWith("http")
+    ? API_BASE
+    : `${window.location.origin}${API_BASE}`;
 
   const url = new URL(
     `${base.replace(/\/$/, "")}/files/${fileId}/versions/${version}/comments/stream`
@@ -36,11 +31,10 @@ export function openCommentsStream(
 
   const es = new EventSource(url.toString());
 
-  // When a comment is created/updated/deleted, just re-fetch the list
   const refresh = async () => {
     try {
       const comments = await listComments(fileId, version);
-      handlers.onComments?.(comments);
+      handlers.onComments?.(comments || []);
     } catch (err) {
       console.error("Failed to refresh comments after SSE event:", err);
       handlers.onError?.(err);
@@ -48,7 +42,7 @@ export function openCommentsStream(
   };
 
   es.addEventListener("connected", () => {
-    // Optionally load comments immediately on connect
+    // load comments once when stream connects
     refresh();
   });
 
@@ -59,11 +53,10 @@ export function openCommentsStream(
   es.onerror = (err) => {
     console.error("Comments SSE error:", err);
     handlers.onError?.(err);
-    // You can decide whether to close or keep trying:
-    // es.close();
+    // you *can* choose to es.close() here, but not required
   };
 
-  // Return cleanup
+  // return cleanup function
   return () => {
     es.close();
   };

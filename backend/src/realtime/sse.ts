@@ -12,23 +12,23 @@ type SSEClient = {
 
 type ChannelKey = string;
 
-// key: "fileId:versionNo" -> set of connected clients
+// fileId:versionNo -> set of connected clients
 const channels = new Map<ChannelKey, Set<SSEClient>>();
 
 function channelKey(fileId: string, versionNo: number): ChannelKey {
   return `${fileId}:${versionNo}`;
 }
 
-function verifyToken(token: string | null): { userId: string } | null {
-  if (!token) return null;
+function verifyToken(raw?: string | null): { userId: string } | null {
+  if (!raw) return null;
+
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload | string;
+    const decoded = jwt.verify(raw, env.JWT_SECRET) as JwtPayload | string;
 
     if (typeof decoded === "string") {
       return { userId: decoded };
     }
 
-    // be tolerant about the field name
     const userId =
       (decoded as any).uid ||
       (decoded as any).id ||
@@ -42,23 +42,34 @@ function verifyToken(token: string | null): { userId: string } | null {
 }
 
 /**
- * SSE endpoint:
  * GET /files/:id/versions/:ver/comments/stream?token=<JWT>
  *
- * In commentsRouter:
- * commentsRouter.get("/files/:id/versions/:ver/comments/stream", commentsStream);
+ * wired in commentsRouter as:
+ * commentsRouter.get(
+ *   "/files/:id/versions/:ver/comments/stream",
+ *   commentsStream
+ * );
  */
 export function commentsStream(req: Request, res: Response) {
-  const { id } = req.params;
-  const verRaw = req.params.ver;
-  const versionNo = Number(verRaw) || 1;
+  const fileId = req.params.id;
+  const versionNo = Number(req.params.ver);
 
-  // token can come from ?token=... OR Authorization: Bearer ...
+  if (!fileId || Number.isNaN(versionNo)) {
+    res
+      .status(400)
+      .json({ success: false, error: "Invalid file id or version" });
+    return;
+  }
+
   const tokenFromQuery =
-    typeof req.query.token === "string" ? (req.query.token as string) : undefined;
+    typeof req.query.token === "string"
+      ? (req.query.token as string)
+      : undefined;
 
   const authHeader =
-    typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+    typeof req.headers.authorization === "string"
+      ? req.headers.authorization
+      : "";
   const tokenFromHeader = authHeader.startsWith("Bearer ")
     ? authHeader.slice("Bearer ".length)
     : undefined;
@@ -74,10 +85,9 @@ export function commentsStream(req: Request, res: Response) {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  // flush headers if supported
   (res as any).flushHeaders?.();
 
-  const key = channelKey(id, versionNo);
+  const key = channelKey(fileId, versionNo);
   const client: SSEClient = { res, userId: auth.userId };
 
   if (!channels.has(key)) {
@@ -85,11 +95,19 @@ export function commentsStream(req: Request, res: Response) {
   }
   channels.get(key)!.add(client);
 
-  // initial hello so client knows it's connected
+  // let client know it’s connected
   res.write(`event: connected\n`);
   res.write(`data: ${JSON.stringify({ success: true })}\n\n`);
 
+  // keep-alive pings
+  const pingInterval = setInterval(() => {
+    if (res.writableEnded) return;
+    res.write(`event: ping\n`);
+    res.write(`data: "ok"\n\n`);
+  }, 25000);
+
   const cleanup = () => {
+    clearInterval(pingInterval);
     const set = channels.get(key);
     if (!set) return;
     set.delete(client);
@@ -103,7 +121,7 @@ export function commentsStream(req: Request, res: Response) {
 }
 
 /**
- * Broadcast a comment event to all clients watching a given file/version.
+ * Broadcast a comment event to all clients watching a file/version.
  */
 export function broadcastComment(
   fileId: string,
@@ -115,8 +133,7 @@ export function broadcastComment(
   const set = channels.get(key);
   if (!set || set.size === 0) return;
 
-  const data =
-    `event: ${event}\n` + `data: ${JSON.stringify(payload)}\n\n`;
+  const data = `event: ${event}\n` + `data: ${JSON.stringify(payload)}\n\n`;
 
   for (const { res } of set) {
     if (!res.writableEnded) {
@@ -125,7 +142,9 @@ export function broadcastComment(
   }
 }
 
-// optional stub
+// (Optional) not used yet
 export function historyList(_req: Request, res: Response) {
-  res.status(501).json({ success: false, error: "Not implemented" });
+  res
+    .status(501)
+    .json({ success: false, error: "Not implemented" });
 }

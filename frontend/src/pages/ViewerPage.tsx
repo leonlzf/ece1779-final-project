@@ -225,20 +225,18 @@ export default function ViewerPage() {
       // open SSE stream for this file + version
       closeStream = openCommentsStream(id, version, {
         onComments: (items) => setComments(items),
-        onError: (err) =>
-          console.error("Comments stream error:", err),
+        onError: (err) => console.error("Comments stream error:", err),
       });
     };
 
     setup();
 
-    // cleanup when id/version changes or component unmounts
+    // cleanup when id or version changes, or on unmount
     return () => {
-      if (closeStream) {
-        closeStream();
-      }
+      if (closeStream) closeStream();
     };
   }, [id, version]);
+
 
 
   // load versions
