@@ -19,9 +19,12 @@ services:
       PORT: "8080"
       DATABASE_URL: "postgresql://admin:123456@db:5432/projectdb"
       DB_SSL: "false"
+
       FILE_ROOT: "/mnt/project_1779_volume_tor1_01"
       UPLOAD_DIR: "/mnt/project_1779_volume_tor1_01"
+
       CLIENT_URL: "http://68.183.200.95"
+
       JWT_SECRET: "698498efc7a8a4164fb4c715bbef0bfa71c48c463a21e39356a186ce0215e5c5"
     volumes:
       - files_data:/mnt/project_1779_volume_tor1_01
