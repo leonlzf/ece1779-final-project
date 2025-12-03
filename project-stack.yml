@@ -20,14 +20,14 @@ services:
       DATABASE_URL: "postgresql://admin:123456@db:5432/projectdb"
       DB_SSL: "false"
 
-      FILE_ROOT: "/mnt/project_1779_volume_tor1_01"
-      UPLOAD_DIR: "/mnt/project_1779_volume_tor1_01"
+      FILE_ROOT: "/mnt/volume_files"
+      UPLOAD_DIR: "/mnt/volume_files"
 
       CLIENT_URL: "http://68.183.200.95"
 
       JWT_SECRET: "698498efc7a8a4164fb4c715bbef0bfa71c48c463a21e39356a186ce0215e5c5"
     volumes:
-      - files_data:/mnt/project_1779_volume_tor1_01
+      - files_data:/mnt/volume_files
     ports:
       - "8080:8080"
     depends_on:
@@ -55,7 +55,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: /mnt/project_1779_volume_tor1_01
+      device: /mnt/volume_files
 
 networks:
   app_net:
