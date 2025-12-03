@@ -60,7 +60,7 @@ jobs:
             script: |
               docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
 
-              docker pull "$IMAGE_BACKEND:latest"
-              docker pull "$IMAGE_FRONTEND:latest"
+              docker pull "${{ env.IMAGE_BACKEND }}:latest"
+              docker pull "${{ env.IMAGE_FRONTEND }}:latest"
 
               docker stack deploy --with-registry-auth -c /root/project-stack.yml ece1779c
