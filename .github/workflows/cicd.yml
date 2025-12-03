@@ -5,8 +5,8 @@ on:
     branches: [ main ]
 
 env:
-  IMAGE_BACKEND: ${{ secrets.DOCKER_HUB_USERNAME }}/ece1779-backend
-  IMAGE_FRONTEND: ${{ secrets.DOCKER_HUB_USERNAME }}/ece1779-frontend
+  IMAGE_BACKEND: ${{ secrets.DOCKERHUB_USERNAME }}/ece1779-backend
+  IMAGE_FRONTEND: ${{ secrets.DOCKERHUB_USERNAME }}/ece1779-frontend
 
 jobs:
   build-and-push:
