@@ -8,8 +8,6 @@ import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import ViewerPage from "./pages/ViewerPage";
 
-import { AppShell } from "./components/layout/AppShell";
-
 function Private({ children }: { children: JSX.Element }) {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" replace />;
@@ -30,6 +28,7 @@ const router = createBrowserRouter([
     ),
   },
 
+  // Viewer WITHOUT AppShell to avoid layout constraints
   {
     path: "/files/:id",
     element: (
@@ -38,7 +37,6 @@ const router = createBrowserRouter([
       </Private>
     ),
   },
-
 
   { path: "*", element: <Navigate to="/login" replace /> },
 ]);
