@@ -310,3 +310,7 @@
     grid-template-columns: 1fr;
   }
 }
+
+.app-shell__body--no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}

@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
@@ -41,7 +40,12 @@ export function AppShell({
         </div>
       </header>
 
-      <div className="app-shell__body">
+      <div
+        className={cn(
+          "app-shell__body",
+          !showSidebar && "app-shell__body--no-sidebar"
+        )}
+      >
         {showSidebar && (
           <aside className="app-sidebar">
             <div className="app-sidebar__section">

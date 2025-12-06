@@ -33,11 +33,12 @@ const router = createBrowserRouter([
   {
     path: "/files/:id",
     element: (
-      <AppShell showSidebar={false}>
+      <Private>
         <ViewerPage />
-      </AppShell>
+      </Private>
     ),
   },
+
 
   { path: "*", element: <Navigate to="/login" replace /> },
 ]);
