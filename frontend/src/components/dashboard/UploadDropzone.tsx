@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Card, CardBody, CardHeader } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { cn } from "../../utils/cn";

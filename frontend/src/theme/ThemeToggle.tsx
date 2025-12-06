@@ -1,4 +1,3 @@
-import React from "react";
 import { useTheme, type ThemeMode } from "./ThemeProvider";
 import { Button } from "../components/ui/Button";
 

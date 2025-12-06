@@ -1,4 +1,3 @@
-import React from "react";
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import type { JSX } from "react";
 
@@ -31,7 +30,6 @@ const router = createBrowserRouter([
     ),
   },
 
-  // Keep your viewer route as-is; wrap in shell for consistent topbar.
   {
     path: "/files/:id",
     element: (
