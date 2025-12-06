@@ -824,3 +824,7 @@ a:hover {
   font-size: 14px;
   line-height: 1.5;
 }
+
+.app-shell__body--no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}
