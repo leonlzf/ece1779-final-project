@@ -1,10 +1,17 @@
+import React, { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
-import { registerApi } from "../auth/api";
-import { useNavigate, Link } from "react-router-dom";
-import { useCallback, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { isAxiosError } from "axios";
 
-type FormValues = { email: string; password: string };
+import { registerApi } from "../auth/api";
+import { Card, CardBody, CardHeader } from "../components/ui/Card";
+import { Input } from "../components/ui/Input";
+import { Button } from "../components/ui/Button";
+
+type FormValues = {
+  email: string;
+  password: string;
+};
 
 export default function RegisterPage() {
   const {
@@ -15,77 +22,117 @@ export default function RegisterPage() {
 
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+
   const navigate = useNavigate();
 
-  const onSubmit = useCallback(async (raw: FormValues) => {
-    setMsg("");
-    setErr("");
+  const onSubmit = useCallback(
+    async (raw: FormValues) => {
+      setMsg("");
+      setErr("");
 
-    const v = { email: raw.email.trim().toLowerCase(), password: raw.password.trim() };
-    try {
-      const { data } = await registerApi(v);
-      const token = data?.token || data?.accessToken;
-      if (token) {
-        localStorage.setItem("token", token);
-        window.location.href = "/dashboard";
-        return;
+      const v = {
+        email: raw.email.trim().toLowerCase(),
+        password: raw.password,
+      };
+
+      try {
+        const { data } = await registerApi(v);
+        const token = data?.token || data?.accessToken;
+
+        if (token) {
+          localStorage.setItem("token", token);
+          window.location.href = "/dashboard";
+          return;
+        }
+
+        setMsg("Registered successfully. Redirecting to login...");
+        window.setTimeout(() => navigate("/login"), 700);
+      } catch (e: unknown) {
+        if (isAxiosError(e)) {
+          const status = e.response?.status;
+          const body: any = e.response?.data;
+
+          if (status === 409) {
+            setErr("Account already exists.");
+            return;
+          }
+
+          if (status === 400 || status === 422) {
+            setErr(body?.message || "Invalid input.");
+            return;
+          }
+
+          setErr(body?.message || "Register failed.");
+          return;
+        }
+
+        if (e instanceof Error) {
+          setErr(e.message);
+          return;
+        }
+
+        setErr("Register failed.");
       }
-      setMsg("Registered successfully. Please login.");
-      setTimeout(() => navigate("/login"), 700);
-    } catch (e: unknown) {
-      if (isAxiosError(e)) {
-        const status = e.response?.status;
-        const body: any = e.response?.data;
-        if (status === 409) return setErr("Account already exists");
-        if (status === 400 || status === 422)
-          return setErr(body?.message || "Invalid input");
-        setErr(body?.message || "Register failed");
-      } else if (e instanceof Error) setErr(e.message);
-      else setErr("Register failed");
-    }
-  }, [navigate]);
+    },
+    [navigate]
+  );
 
   return (
     <div className="auth-layout">
-      <div className="card">
-        <h2 className="auth-header">Create account</h2>
-        <p className="auth-subtitle">Join the workspace to upload and collaborate.</p>
+      <Card className="auth-card">
+        <CardHeader>
+          <h1 className="auth-title">Create account</h1>
+          <p className="auth-subtitle">
+            Join your workspace and start collaborating on files.
+          </p>
+        </CardHeader>
 
-        {err && <div className="alert alert-danger">{err}</div>}
-        {msg && <div className="alert alert-success">{msg}</div>}
+        <CardBody>
+          {err && <div className="auth-alert auth-alert--error">{err}</div>}
+          {msg && <div className="auth-alert auth-alert--success">{msg}</div>}
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <input
-            className={`input ${errors.email ? "input-error" : ""}`}
-            placeholder="Email"
-            type="email"
-            {...register("email", {
-              required: "Email is required",
-              pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email format" },
-            })}
-          />
-          {errors.email && <p style={{ color: "var(--danger)" }}>{errors.email.message}</p>}
+          <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
+            <Input
+              label="Email"
+              placeholder="you@example.com"
+              type="email"
+              autoComplete="email"
+              error={errors.email?.message}
+              {...register("email", {
+                required: "Email is required",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Invalid email format",
+                },
+              })}
+            />
 
-          <input
-            className={`input ${errors.password ? "input-error" : ""}`}
-            placeholder="Password"
-            type="password"
-            {...register("password", {
-              required: "Password is required",
-              minLength: { value: 1, message: "At least 1 character" },
-            })}
-          />
-          {errors.password && <p style={{ color: "var(--danger)" }}>{errors.password.message}</p>}
+            <Input
+              label="Password"
+              placeholder="Choose a password"
+              type="password"
+              autoComplete="new-password"
+              error={errors.password?.message}
+              {...register("password", {
+                required: "Password is required",
+                minLength: {
+                  value: 1,
+                  message: "At least 1 character",
+                },
+              })}
+            />
 
-          <button className="btn" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Registering…" : "Register"}
-          </button>
-        </form>
+            <Button type="submit" loading={isSubmitting} className="auth-submit">
+              Register
+            </Button>
+          </form>
 
-        <p className="mt-2">
-          Already have an account? <Link to="/login">Login</Link>
-        </p>
-      </div>
+          <div className="auth-foot">
+            <span>Already have an account?</span>
+            <Link to="/login">Sign in</Link>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 }

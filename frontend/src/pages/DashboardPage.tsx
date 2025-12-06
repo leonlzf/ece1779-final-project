@@ -1,11 +1,9 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+
 import { useAuth } from "../auth/AuthContext";
-import {
-  getFileTags,
-  upsertFileTag,
-  renameFileTag,
-  removeFileTag,
-} from "../modulesAPI/tags";
+
 import {
   getFilesApi,
   uploadFileApi,
@@ -13,22 +11,37 @@ import {
   downloadFileApi,
   type FileItem,
 } from "../modulesAPI/files";
-import { useNavigate } from "react-router-dom";
-import { createPortal } from "react-dom";
 
-// function toTagArray(v: string[] | string | undefined | null): string[] {
-//   return Array.isArray(v) ? v : v ? [String(v)] : [];
-// }
+import {
+  getFileTags,
+  upsertFileTag,
+  renameFileTag,
+  removeFileTag,
+} from "../modulesAPI/tags";
 
-/** =====================  Tag chip with color  ===================== */
+import { AppShell } from "../components/layout/AppShell";
+import { UploadDropzone } from "../components/dashboard/UploadDropzone";
+import {
+  DashboardToolbar,
+  type SearchMode,
+  type SortMode,
+} from "../components/dashboard/DashboardToolbar";
+
+import { Button } from "../components/ui/Button";
+import { Card } from "../components/ui/Card";
+import { useToast } from "../components/ui/ToastProvider";
+import { useDebounce } from "../hooks/useDebounce";
+
+/* ===================== Tag chip with color ===================== */
+
 const CHIP_COLORS = [
-  "#5b8cff", // blue
-  "#22c55e", // green
-  "#f59e0b", // amber
-  "#ef4444", // red
-  "#a78bfa", // violet
-  "#14b8a6", // teal
-  "#64748b", // slate
+  "#5b8cff",
+  "#22c55e",
+  "#f59e0b",
+  "#ef4444",
+  "#a78bfa",
+  "#14b8a6",
+  "#64748b",
 ];
 
 function getSavedColorIndex(fileId: string) {
@@ -40,11 +53,9 @@ function getSavedColorIndex(fileId: string) {
 function TagChip({
   fileId,
   label,
-  onClick,
 }: {
   fileId: string;
   label?: string | null;
-  onClick?: () => void; 
 }) {
   const [idx, setIdx] = useState<number>(() => getSavedColorIndex(fileId));
 
@@ -53,10 +64,10 @@ function TagChip({
     const next = (idx + 1) % CHIP_COLORS.length;
     setIdx(next);
     localStorage.setItem(`tagColor:${fileId}`, String(next));
-    onClick?.();
   };
 
   const color = CHIP_COLORS[idx];
+
   const style: React.CSSProperties = label
     ? {
         background: `${color}26`,
@@ -65,8 +76,8 @@ function TagChip({
       }
     : {
         background: "transparent",
-        color: "#9AA4B2",
-        border: "1px dashed #3b3f46",
+        color: "var(--muted)",
+        border: "1px dashed var(--border)",
       };
 
   return (
@@ -82,7 +93,8 @@ function TagChip({
   );
 }
 
-/** =====================  Tag menu   ===================== */
+/* ===================== Tag menu ===================== */
+
 function TagMenu({
   fileId,
   onChanged,
@@ -93,13 +105,14 @@ function TagMenu({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tag, setTag] = useState<string | null | undefined>(undefined);
+
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      const t = await getFileTags(fileId); // string | null | undefined
+      const t = await getFileTags(fileId);
       const v = t ?? null;
       setTag(v);
       onChanged?.(v);
@@ -138,18 +151,22 @@ function TagMenu({
 
   return (
     <div className="tag-menu-wrap" onClick={(e) => e.stopPropagation()}>
-      <button
+      <Button
         ref={btnRef}
-        className="btn btn-outline"
+        variant="outline"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
       >
         Tags ▾
-      </button>
+      </Button>
 
       {open &&
         createPortal(
           <>
-            <div className="tag-menu-overlay" onClick={() => setOpen(false)} />
+            <div
+              className="tag-menu-overlay"
+              onClick={() => setOpen(false)}
+            />
             <div
               className="tag-menu-dropdown"
               style={{
@@ -176,7 +193,11 @@ function TagMenu({
                 <button className="tag-action" onClick={onAdd}>
                   Add
                 </button>
-                <button className="tag-action" onClick={onRename} disabled={!tag}>
+                <button
+                  className="tag-action"
+                  onClick={onRename}
+                  disabled={!tag}
+                >
                   Rename
                 </button>
                 <button
@@ -195,7 +216,8 @@ function TagMenu({
   );
 }
 
-/** =====================  File list utils  ===================== */
+/* ===================== Helpers ===================== */
+
 function formatSize(bytes: number | undefined) {
   if (!Number.isFinite(Number(bytes)) || (bytes ?? 0) <= 0) return "0 KB";
   const units = ["B", "KB", "MB", "GB"];
@@ -208,25 +230,34 @@ function formatSize(bytes: number | undefined) {
   return `${n.toFixed(2)} ${units[i]}`;
 }
 
-/** =====================  Role badge  ===================== */
 function RoleBadge({ role }: { role?: "OWNER" | "COLLAB" | "VIEWER" }) {
   if (!role) return null;
+
   const label =
     role === "OWNER" ? "owner" : role === "COLLAB" ? "collaborator" : "viewer";
+
   return <span className={`role-badge role-${label}`}>{label}</span>;
 }
 
+/* ===================== Page ===================== */
+
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+
   const [allFiles, setAllFiles] = useState<FileItem[]>([]);
-  const [tagsMap, setTagsMap] = useState<Record<string, string | null>>({}); // fileId -> tag
+  const [tagsMap, setTagsMap] = useState<Record<string, string | null>>({});
+
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"name" | "tag">("name");
+  const [mode, setMode] = useState<SearchMode>("name");
+  const [sort, setSort] = useState<SortMode>("created_desc");
+  const [view, setView] = useState<"list" | "grid">("list");
+
+  const debouncedQuery = useDebounce(query, 180);
 
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  const navigate = useNavigate();
 
   const loadFiles = async () => {
     try {
@@ -243,6 +274,7 @@ export default function DashboardPage() {
           }
         })
       );
+
       const map: Record<string, string | null> = {};
       for (const [id, t] of pairs) map[id] = t;
       setTagsMap(map);
@@ -257,33 +289,55 @@ export default function DashboardPage() {
   }, []);
 
   const visibleFiles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return allFiles;
+    const q = debouncedQuery.trim().toLowerCase();
 
-    if (mode === "name") {
-      return allFiles.filter((f) => (f.name || "").toLowerCase().includes(q));
-    }
+    let base = !q
+      ? allFiles
+      : mode === "name"
+      ? allFiles.filter((f) => (f.name || "").toLowerCase().includes(q))
+      : allFiles.filter((f) => (tagsMap[f.id] || "").toLowerCase().includes(q));
 
-    return allFiles.filter((f) => {
-      const t = tagsMap[f.id];
-      return (t || "").toLowerCase().includes(q);
+    base = [...base];
+
+    base.sort((a, b) => {
+      if (sort === "created_desc") {
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
+      if (sort === "created_asc") {
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+      }
+      if (sort === "name_asc") return (a.name || "").localeCompare(b.name || "");
+      if (sort === "name_desc") return (b.name || "").localeCompare(a.name || "");
+      if (sort === "size_desc") return (b.size || 0) - (a.size || 0);
+      return 0;
     });
-  }, [allFiles, query, mode, tagsMap]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputEl = e.currentTarget;
-    const file = e.target.files?.[0];
-    if (!file) return;
+    return base;
+  }, [allFiles, debouncedQuery, mode, tagsMap, sort]);
+
+  const handleUploadFile = async (file: File) => {
     try {
       setUploading(true);
       await uploadFileApi(file);
       await loadFiles();
+      toast.push({
+        type: "success",
+        title: "Upload complete",
+        message: "Your file is now in the workspace.",
+      });
     } catch (err) {
       console.error("Upload failed:", err);
-      alert("File upload failed.");
+      toast.push({
+        type: "error",
+        title: "Upload failed",
+        message: "Please try again.",
+      });
     } finally {
       setUploading(false);
-      if (inputEl) inputEl.value = "";
     }
   };
 
@@ -292,149 +346,149 @@ export default function DashboardPage() {
     try {
       setDeletingId(id);
       await deleteFileApi(id);
+
       setAllFiles((prev) => prev.filter((f) => f.id !== id));
       setTagsMap((m) => {
         const n = { ...m };
         delete n[id];
         return n;
       });
+
+      toast.push({
+        type: "success",
+        title: "File deleted",
+        message: "The file was removed successfully.",
+      });
     } catch (err) {
       console.error("Delete failed:", err);
-      alert("Delete failed.");
+      toast.push({
+        type: "error",
+        title: "Delete failed",
+        message: "Please try again.",
+      });
     } finally {
       setDeletingId(null);
     }
   };
 
-  function openViewer(file: { id: string; name: string; latestVersion?: number }) {
+  const openViewer = (file: {
+    id: string;
+    name: string;
+    latestVersion?: number;
+  }) => {
     const url = `/files/${file.id}?name=${encodeURIComponent(file.name)}${
       file.latestVersion != null ? `&version=${file.latestVersion}` : ""
     }`;
     navigate(url);
-  }
+  };
 
   return (
-    <div className="dashboard">
-      <div className="dashboard-header">
-        <h2>Dashboard</h2>
-        <div>
-          <span className="user-email">{user?.email}</span>
-          <button className="btn btn-ghost" onClick={logout}>
-            Logout
-          </button>
+    <AppShell>
+      <div className="dashboard">
+        <div className="dashboard-header">
+          <div className="dashboard-header__left">
+            <h2 className="dashboard-title">Dashboard</h2>
+            <span className="dashboard-sub">
+              Upload, tag, and manage file versions.
+            </span>
+          </div>
+
+          <div className="dashboard-header__right">
+            {user?.email && <span className="user-email-pill">{user.email}</span>}
+            <Button variant="ghost" size="sm" onClick={logout}>
+              Logout
+            </Button>
+          </div>
+        </div>
+
+        <DashboardToolbar
+          query={query}
+          setQuery={setQuery}
+          mode={mode}
+          setMode={setMode}
+          sort={sort}
+          setSort={setSort}
+          view={view}
+          setView={setView}
+        />
+
+        <UploadDropzone onUpload={handleUploadFile} uploading={uploading} />
+
+        <div className={view === "grid" ? "file-grid" : "file-list"}>
+          {visibleFiles.length === 0 ? (
+            <Card className="no-files-card">
+              <div className="no-files">
+                No files yet. Upload your first file to get started.
+              </div>
+            </Card>
+          ) : (
+            visibleFiles.map((f) => {
+              const tag = tagsMap[f.id] ?? null;
+
+              return (
+                <div
+                  key={f.id}
+                  className="file-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openViewer(f)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") openViewer(f);
+                  }}
+                >
+                  <div className="file-icon">📄</div>
+
+                  <div className="file-info">
+                    <div className="file-row">
+                      <TagChip fileId={f.id} label={tag} />
+                      <RoleBadge role={f.role} />
+                      <div className="file-name">{f.name}</div>
+                    </div>
+
+                    <div className="file-meta">
+                      <span>{formatSize(f.size)}</span>
+                      <span>•</span>
+                      <span>{new Date(f.created_at).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="file-actions">
+                    <TagMenu
+                      fileId={f.id}
+                      onChanged={(newTag) =>
+                        setTagsMap((m) => ({ ...m, [f.id]: newTag }))
+                      }
+                    />
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadFileApi(f.id, f.name, f.latestVersion);
+                      }}
+                    >
+                      Download
+                    </Button>
+
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      loading={deletingId === f.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(f.id);
+                      }}
+                    >
+                      {deletingId === f.id ? "Deleting" : "Delete"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
-
-      {/* search bar */}
-      <div className="search-bar">
-        <input
-          className="input search-input"
-          placeholder={mode === "name" ? "Search by filename..." : "Search by tag..."}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          className="input search-select"
-          value={mode}
-          onChange={(e) => setMode(e.target.value as "name" | "tag")}
-          title="Search mode"
-        >
-          <option value="name">Filename</option>
-          <option value="tag">Tag</option>
-        </select>
-        <button className="btn btn-search" onClick={() => setQuery((q) => q.trim())} title="Apply">
-          Search
-        </button>
-        {query && (
-          <button className="btn btn-ghost" onClick={() => setQuery("")}>
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* Upload Section */}
-      <div className="upload-card">
-        <h3>Upload File</h3>
-        <p>Choose a file from your computer to upload.</p>
-        <label htmlFor="file-upload" className="btn btn-primary">
-          {uploading ? "Uploading..." : "Select File"}
-        </label>
-        <input id="file-upload" type="file" style={{ display: "none" }} onChange={handleUpload} />
-      </div>
-
-      {/* File List */}
-      <div className="file-list">
-        {visibleFiles.length === 0 ? (
-          <p className="no-files">No files uploaded yet.</p>
-        ) : (
-          visibleFiles.map((f) => {
-            const tag = tagsMap[f.id] ?? null;
-
-            return (
-              <div
-                key={f.id}
-                className="file-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => openViewer(f)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") openViewer(f);
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <div className="file-icon">📄</div>
-
-                <div className="file-info">
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <TagChip fileId={f.id} label={tag} />
-                    <RoleBadge role={f.role} />
-                    <div className="file-name">{f.name}</div>
-                  </div>
-
-                  <div className="file-meta">
-                    <span>{formatSize(f.size)}</span>
-                    <span>•</span>
-                    <span>{new Date(f.created_at).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="file-actions" style={{ display: "flex", gap: 8 }}>
-                  <TagMenu
-                    fileId={f.id}
-                    onChanged={(newTag) =>
-                      setTagsMap((m) => ({
-                        ...m,
-                        [f.id]: newTag,
-                      }))
-                    }
-                  />
-
-                  <button
-                    className="btn btn-outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      downloadFileApi(f.id, f.name, f.latestVersion);
-                    }}
-                  >
-                    Download
-                  </button>
-
-                  <button
-                    className="btn btn-outline btn-danger"
-                    disabled={deletingId === f.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(f.id);
-                    }}
-                  >
-                    {deletingId === f.id ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
+    </AppShell>
   );
 }

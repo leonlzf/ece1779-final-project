@@ -1,0 +1,174 @@
+/* -------- Buttons -------- */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform 80ms ease, opacity 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.ui-btn--sm { padding: 6px 10px; font-size: 12px; }
+.ui-btn--md { padding: 10px 14px; font-size: 14px; }
+.ui-btn--lg { padding: 12px 16px; font-size: 15px; }
+
+.ui-btn--primary {
+  background: var(--primary);
+  color: white;
+}
+.ui-btn--primary:hover { background: var(--primary-600); }
+
+.ui-btn--outline {
+  background: transparent;
+  color: var(--fg);
+  border-color: var(--border);
+}
+.ui-btn--outline:hover { background: var(--surface); }
+
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--muted);
+}
+.ui-btn--ghost:hover { opacity: 0.85; }
+
+.ui-btn--danger {
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+.ui-btn--danger:hover { background: rgba(220, 38, 38, 0.14); }
+
+.ui-btn--subtle {
+  background: var(--surface);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.ui-btn--loading { opacity: 0.8; cursor: progress; }
+.ui-btn:active { transform: translateY(1px); }
+.ui-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ui-btn__label { line-height: 1; }
+
+/* -------- Spinner -------- */
+.ui-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(127,127,127,0.25);
+  border-top-color: currentColor;
+  animation: ui-spin 0.8s linear infinite;
+}
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+
+/* -------- Fields -------- */
+.ui-field { display: grid; gap: 6px; }
+.ui-field__label { font-size: 12px; color: var(--muted); }
+.ui-field__hint { font-size: 11px; color: var(--muted); }
+.ui-field__error { font-size: 11px; color: var(--danger); }
+
+.ui-input, .ui-select {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border 120ms ease, background 120ms ease;
+}
+.ui-input:focus, .ui-select:focus {
+  border-color: var(--primary);
+  background: var(--surface);
+}
+.ui-input--error, .ui-select--error {
+  border-color: rgba(220,38,38,0.5);
+}
+
+/* -------- Cards -------- */
+.ui-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.ui-card__header { padding: 16px 18px 0 18px; }
+.ui-card__body { padding: 16px 18px; }
+.ui-card__footer {
+  padding: 0 18px 16px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* -------- Modal -------- */
+.ui-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: grid;
+  place-items: center;
+  z-index: 2000;
+}
+.ui-modal {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-2);
+}
+.ui-modal__header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ui-modal__title { font-weight: 650; }
+.ui-modal__body { padding: 16px; }
+.ui-modal__body--tight { padding-top: 18px; }
+.ui-modal__footer {
+  padding: 12px 16px 16px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* -------- Toasts -------- */
+.ui-toasts {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  gap: 10px;
+  z-index: 3000;
+}
+.ui-toast {
+  min-width: 260px;
+  max-width: 360px;
+  padding: 12px 14px 12px 14px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-1);
+  position: relative;
+}
+.ui-toast--success { border-color: rgba(22,163,74,0.35); }
+.ui-toast--error { border-color: rgba(220,38,38,0.35); }
+.ui-toast--info { border-color: rgba(59,130,246,0.35); }
+
+.ui-toast__title { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.ui-toast__msg { font-size: 12.5px; color: var(--muted); }
+.ui-toast__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+}
