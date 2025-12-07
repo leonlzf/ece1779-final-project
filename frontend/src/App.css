@@ -553,8 +553,8 @@ a:hover {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   padding: 12px;
-  background: #0f172a;
-  color: #fff;
+  background: #ffffff;
+  color: #000000;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
