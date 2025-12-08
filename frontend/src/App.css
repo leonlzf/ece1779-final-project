@@ -859,5 +859,9 @@ a:hover {
 [data-theme="light"] .editor--readonly .editor__display {
   border: 1px solid rgba(236, 236, 236, 0.16);
   background: #ffffff;
+}
 
+[data-theme="light"] .viewer__comments {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(238, 238, 238, 0.35);
 }
