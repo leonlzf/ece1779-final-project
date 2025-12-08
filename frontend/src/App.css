@@ -553,8 +553,8 @@ a:hover {
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   padding: 12px;
-  background: #ffffff;
-  color: #000000;
+  background: #0f172a;
+  color: #fff;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -828,3 +828,31 @@ a:hover {
 .app-shell__body--no-sidebar {
   grid-template-columns: minmax(0, 1fr);
 }
+
+[data-theme="light"] .editor__textarea {
+  background: #f9fafb;
+  color: #0f172a;
+  border-color: #d1d5db;
+}
+
+[data-theme="light"] .btn.btn-outline {
+  color: #0f172a;
+  border-color: #cbd5f5;
+}
+
+[data-theme="light"] .btn.btn-outline:hover {
+  background: #365c9d;
+}
+
+[data-theme="light"] .viewer__comments {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+[data-theme="light"] .comments__input,
+[data-theme="light"] .comment-card {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #e5e7eb;
+}
+
