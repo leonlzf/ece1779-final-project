@@ -10,7 +10,8 @@
 
 /* top */
 .auth-title {
-  margin-bottom: 24px;
+  font-size: large;
+  margin-bottom: 36px;
 }
 
 .auth-header {
