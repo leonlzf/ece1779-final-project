@@ -868,9 +868,15 @@ a:hover {
 
 [data-theme="light"] .form__input,
 [data-theme="light"] .form__select {
-  color: #0f172a;
+  color: #000000;
 }
 
 [data-theme="light"] .form__input::placeholder {
   color: #478ced;
+}
+
+[data-theme="light"] .modal,
+[data-theme="light"] .modal__header h3,
+[data-theme="light"] .form__label {
+  color: #000000;
 }
