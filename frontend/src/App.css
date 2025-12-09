@@ -829,6 +829,8 @@ a:hover {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/*light mode patches*/
+
 [data-theme="light"] .editor__textarea {
   background: #f9fafb;
   color: #0f172a;
@@ -879,4 +881,21 @@ a:hover {
 [data-theme="light"] .modal__header h3,
 [data-theme="light"] .form__label {
   color: #000000;
+}
+
+[data-theme="light"] .comment-card__snippet {
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: rgba(235, 238, 241, 0.9);
+  margin-bottom: 4px;
+  max-height: 60px;
+  overflow: auto;
+}
+
+[data-theme="light"] .versions__select,
+[data-theme="light"] .versions__select option {
+  background-color: #c6c6c6;
+  color: #000000;
+  border-color: #d1d5db;
 }
