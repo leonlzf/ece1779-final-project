@@ -865,3 +865,12 @@ a:hover {
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(238, 238, 238, 0.35);
 }
+
+[data-theme="light"] .form__input,
+[data-theme="light"] .form__select {
+  color: #0f172a;
+}
+
+[data-theme="light"] .form__input::placeholder {
+  color: #478ced;
+}
