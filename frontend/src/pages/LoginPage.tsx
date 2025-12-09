@@ -37,7 +37,8 @@ export default function LoginPage() {
     <div className="auth-layout">
       <Card className="auth-card">
         <CardHeader>
-          <h1 className="auth-title">Sign in</h1>
+          <h1 className="auth-title text-center">Welcome to OpenCollab.</h1>
+          <h2 className="auth-header">Sign in</h2>
           <p className="auth-subtitle">
             Access your workspace to manage files, tags, versions, and comments.
           </p>

@@ -9,6 +9,10 @@
 }
 
 /* top */
+.auth-title {
+  margin-bottom: 24px;
+}
+
 .auth-header {
   margin-bottom: 12px;
 }
@@ -777,6 +781,10 @@ a:hover {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.text-center {
+  text-align: center;
 }
 
 .btn.btn-ghost {
