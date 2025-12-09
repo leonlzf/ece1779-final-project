@@ -596,3 +596,6 @@ We also gained a stronger appreciation for clean service boundaries. Keeping the
 On the DevOps side, setting up a CI/CD pipeline changed how we worked. Once automated builds and deployments were stable, our iteration cycle became faster and more reliable, allowing us to focus on quality, edge cases, and user experience instead of manual release steps. This emphasized how automation reduces operational risk and helps maintain consistency across environments.
 
 Overall, this project was a valuable blend of system design, implementation, and real deployment practice. We finish with a deeper understanding of cloud-native tradeoffs-especially around persistence, permissions, and operational consistency-and a solid foundation that could be extended with richer search, analytics, and administrative tooling.
+
+## VIDEO DEMO:
+- **Link:** **https://youtu.be/mX4Ewwx05m4** 
